@@ -11,30 +11,49 @@ from app.core.dependencies import get_current_user
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
 
-@router.get("/overview", summary="System-wide attendance overview stats")
-async def overview(db=Depends(get_db), _=Depends(get_current_user)):
-    return await get_overview_stats(db)
-
-
-@router.get("/course/{course_id}", summary="Per-course attendance report")
-async def course_report(course_id: str, db=Depends(get_db), _=Depends(get_current_user)):
-    return await get_course_report(db, course_id)
-
-
-@router.get("/student/{student_id}", summary="Per-student attendance report")
-async def student_report(student_id: str, db=Depends(get_db), _=Depends(get_current_user)):
-    return await get_student_report(db, student_id)
-
-
-@router.get("/export/csv", summary="Export attendance report as CSV")
-async def export_csv(
-    course_id: Optional[str] = Query(None),
-    student_id: Optional[str] = Query(None),
+@router.get("/overview", summary="System-wide attendance overview stats (supports date filtering)")
+async def overview(
+    start_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    end_date:   Optional[str] = Query(None, description="YYYY-MM-DD"),
     db=Depends(get_db),
     _=Depends(get_current_user),
 ):
-    csv_data = await export_csv_data(db, course_id, student_id)
-    name = f"report_{'course' if course_id else 'student'}.csv"
+    return await get_overview_stats(db, start_date, end_date)
+
+
+@router.get("/course/{course_id}", summary="Per-course attendance report with optional date filter")
+async def course_report(
+    course_id: str,
+    start_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    end_date:   Optional[str] = Query(None, description="YYYY-MM-DD"),
+    db=Depends(get_db),
+    _=Depends(get_current_user),
+):
+    return await get_course_report(db, course_id, start_date, end_date)
+
+
+@router.get("/student/{student_id}", summary="Per-student attendance report with optional date filter")
+async def student_report(
+    student_id: str,
+    start_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    end_date:   Optional[str] = Query(None, description="YYYY-MM-DD"),
+    db=Depends(get_db),
+    _=Depends(get_current_user),
+):
+    return await get_student_report(db, student_id, start_date, end_date)
+
+
+@router.get("/export/csv", summary="Export report as CSV (course or student, supports date filter)")
+async def export_csv(
+    course_id:  Optional[str] = Query(None),
+    student_id: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    end_date:   Optional[str] = Query(None, description="YYYY-MM-DD"),
+    db=Depends(get_db),
+    _=Depends(get_current_user),
+):
+    csv_data = await export_csv_data(db, course_id, student_id, start_date, end_date)
+    name = f"attendance_{'course' if course_id else 'student'}_report.csv"
     return StreamingResponse(
         io.StringIO(csv_data),
         media_type="text/csv",

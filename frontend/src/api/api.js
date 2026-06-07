@@ -43,9 +43,9 @@ export const qrApi = {
 }
 
 export const reportsApi = {
-  overview:      ()       => axiosInstance.get('/reports/overview').then(r => r.data),
-  courseReport:  (id)     => axiosInstance.get(`/reports/course/${id}`).then(r => r.data),
-  studentReport: (id)     => axiosInstance.get(`/reports/student/${id}`).then(r => r.data),
+  overview:      (params) => axiosInstance.get('/reports/overview', { params }).then(r => r.data),
+  courseReport:  (id, params) => axiosInstance.get(`/reports/course/${id}`, { params }).then(r => r.data),
+  studentReport: (id, params) => axiosInstance.get(`/reports/student/${id}`, { params }).then(r => r.data),
   exportCsv:     (params) => axiosInstance.get('/reports/export/csv', { params, responseType: 'blob' }).then(r => r.data),
 }
 

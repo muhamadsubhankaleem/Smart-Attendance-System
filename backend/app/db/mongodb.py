@@ -7,11 +7,23 @@ _db: AsyncIOMotorDatabase = None
 
 async def connect_db() -> None:
     global _client, _db
-    _client = AsyncIOMotorClient(settings.MONGO_URI)
+    # serverSelectionTimeoutMS=5000 → fail fast instead of hanging 30 s
+    _client = AsyncIOMotorClient(
+        settings.MONGO_URI,
+        serverSelectionTimeoutMS=5000,
+    )
     _db = _client[settings.DB_NAME]
-    # Verify connectivity on startup
-    await _client.admin.command("ping")
-    print(f"✅ Connected to MongoDB [{settings.DB_NAME}]")
+    try:
+        await _client.admin.command("ping")
+        print(f"✅ Connected to MongoDB [{settings.DB_NAME}]")
+    except Exception as e:
+        print(
+            f"\n⚠️  MongoDB connection failed: {e}\n"
+            "   Make sure MongoDB is running:\n"
+            "   • Local:  start the MongoDB service (mongod)\n"
+            "   • Atlas:  set MONGO_URI in backend/.env\n"
+            "   The API will start but database operations will fail.\n"
+        )
 
 
 async def close_db() -> None:
