@@ -8,7 +8,7 @@ passlib[bcrypt]==1.7.4
 python-multipart==0.0.9
 python-dotenv==1.0.1
 qrcode[pil]==7.4.2
-Pillow==10.3.0
-numpy==1.26.4
-opencv-python==4.9.0.80
+Pillow>=12.0.0
+numpy>=2.0.0
+opencv-python>=4.10.0.84
 # face-recognition==1.3.0   # Uncomment after installing cmake + dlib
