@@ -11,7 +11,7 @@ def _to_resp(s: dict) -> StudentResponse:
         roll_number=s["roll_number"],
         name=s["name"],
         email=s["email"],
-        department=s["department"],
+        department=s.get("department", ""),  # fallback for old docs
         semester=s["semester"],
         phone=s.get("phone"),
         enrolled_courses=[str(c) for c in s.get("enrolled_courses", [])],
