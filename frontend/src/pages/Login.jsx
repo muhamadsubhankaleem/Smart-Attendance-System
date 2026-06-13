@@ -30,7 +30,16 @@ export default function Login({ isRegister = false }) {
         body: JSON.stringify(body),
       });
 
-      const data = await res.json();
+      // Safely parse — server may return non-JSON when DB is down
+      let data;
+      const text = await res.text();
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(res.status === 503
+          ? 'Database is not available. Please try again later.'
+          : `Server error (${res.status})`);
+      }
 
       if (!res.ok) {
         throw new Error(data.detail || 'Something went wrong');
@@ -41,7 +50,9 @@ export default function Login({ isRegister = false }) {
       }
       navigate('/dashboard');
     } catch (err) {
-      setError(err.message);
+      setError(err.message === 'Failed to fetch'
+        ? 'Cannot connect to server. Is the backend running?'
+        : err.message);
     } finally {
       setLoading(false);
     }

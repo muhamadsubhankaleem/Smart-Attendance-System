@@ -5,8 +5,7 @@ from pathlib import Path
 
 class Settings(BaseSettings):
     APP_NAME: str = "SmartAttend"
-    MONGO_URI: str = "mongodb://localhost:27017"
-    DB_NAME: str = "smart_attendance"
+    DATABASE_URL: str = "sqlite+aiosqlite:///./smart_attendance.db"
     SECRET_KEY: str = "change-me"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30

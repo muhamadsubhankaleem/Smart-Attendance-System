@@ -1,31 +1,29 @@
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.orm import DeclarativeBase
 from app.core.config import settings
 
-_client: AsyncIOMotorClient = None
-_db: AsyncIOMotorDatabase = None
+engine = create_async_engine(settings.DATABASE_URL, echo=False)
+async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
-async def connect_db() -> None:
-    global _client, _db
-    _client = AsyncIOMotorClient(settings.MONGO_URI, serverSelectionTimeoutMS=5000)
-    _db = _client[settings.DB_NAME]
-    try:
-        await _client.admin.command("ping")
-        print(f"[OK] Connected to MongoDB [{settings.DB_NAME}]")
-    except Exception as e:
-        print(
-            f"\n[WARN] MongoDB connection failed: {e}\n"
-            "   The API will start but database operations will fail.\n"
-            "   Start MongoDB or set MONGO_URI in backend/.env\n"
-        )
+class Base(DeclarativeBase):
+    pass
+
+
+async def init_db() -> None:
+    """Create all tables on startup."""
+    from app.models import User  # noqa: F401 — ensure model is registered
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    print("[OK] SQLite database ready")
+
+
+async def get_db():
+    """FastAPI dependency — yields a DB session."""
+    async with async_session() as session:
+        yield session
 
 
 async def close_db() -> None:
-    global _client
-    if _client:
-        _client.close()
-        print("[OK] MongoDB connection closed")
-
-
-async def get_db() -> AsyncIOMotorDatabase:
-    return _db
+    await engine.dispose()
+    print("[OK] Database connection closed")
