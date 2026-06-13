@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 const SIDEBAR_ITEMS = [
@@ -21,7 +21,35 @@ const MOCK_ATTENDANCE = [
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('overview');
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        navigate('/login');
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/v1/auth/me?token=${encodeURIComponent(token)}`);
+        if (!res.ok) {
+          throw new Error('Unauthorized');
+        }
+        const data = await res.json();
+        setUser(data);
+      } catch (err) {
+        localStorage.removeItem('token');
+        navigate('/login');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUser();
+  }, [navigate]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -31,6 +59,17 @@ export default function Dashboard() {
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   });
+
+  if (loading) {
+    return (
+      <div className="auth-page" style={{ justifyContent: 'center', alignItems: 'center' }}>
+        <div className="orb orb-1" />
+        <div style={{ color: 'var(--text-primary)', fontSize: 'var(--font-lg)' }}>
+          Loading dashboard...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -42,7 +81,7 @@ export default function Dashboard() {
         </Link>
         <div className="navbar-actions">
           <span style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-sm)' }}>
-            Welcome, Admin
+            Welcome, {user?.full_name || 'User'}
           </span>
           <button className="btn btn-ghost" onClick={handleLogout}>
             Logout

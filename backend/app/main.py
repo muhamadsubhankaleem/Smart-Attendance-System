@@ -46,8 +46,9 @@ from fastapi.responses import JSONResponse
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    traceback.print_exc()  # Print full traceback to terminal
-    return JSONResponse(status_code=500, content={"detail": str(exc)})
+    tb = traceback.format_exc()
+    print(tb)  # Print to terminal
+    return JSONResponse(status_code=500, content={"detail": str(exc), "traceback": tb})
 
 
 @app.get("/health", tags=["Health"])
@@ -57,4 +58,4 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("app.main:app", host="127.0.0.1", port=8001, reload=True)
