@@ -10,13 +10,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.db import connect_db, close_db
+from app.db import init_db, close_db
 from app.api import router as auth_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await connect_db()
+    await init_db()
     print(f"[OK] {settings.APP_NAME} API is running")
     yield
     await close_db()
