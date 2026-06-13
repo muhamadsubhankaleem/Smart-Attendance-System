@@ -35,6 +35,13 @@ export default function Dashboard() {
     sessions_today: 0
   });
 
+  // Report States
+  const [reportType, setReportType] = useState('course');
+  const [selectedReportCourse, setSelectedReportCourse] = useState('');
+  const [selectedReportStudent, setSelectedReportStudent] = useState('');
+  const [reportData, setReportData] = useState([]);
+  const [reportLoading, setReportLoading] = useState(false);
+
   // Modal States
   const [showCourseModal, setShowCourseModal] = useState(false);
   const [showStudentModal, setShowStudentModal] = useState(false);
@@ -102,6 +109,40 @@ export default function Dashboard() {
     }
   };
 
+  const fetchCourseReport = async (courseCode) => {
+    if (!courseCode) return;
+    setReportLoading(true);
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`/api/v1/auth/reports/course/${encodeURIComponent(courseCode)}?token=${encodeURIComponent(token)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setReportData(data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const fetchStudentReport = async (studentId) => {
+    if (!studentId) return;
+    setReportLoading(true);
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`/api/v1/auth/reports/student/${encodeURIComponent(studentId)}?token=${encodeURIComponent(token)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setReportData(data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
   useEffect(() => {
     const fetchUser = async () => {
       const token = localStorage.getItem('token');
@@ -141,9 +182,32 @@ export default function Dashboard() {
         fetchAttendance();
         fetchCourses();
         fetchStudents();
+      } else if (activeTab === 'reports') {
+        fetchCourses();
+        fetchStudents();
       }
     }
   }, [activeTab, user]);
+
+  useEffect(() => {
+    if (activeTab === 'reports') {
+      if (reportType === 'course') {
+        fetchCourseReport(selectedReportCourse);
+      } else {
+        fetchStudentReport(selectedReportStudent);
+      }
+    }
+  }, [reportType, selectedReportCourse, selectedReportStudent, activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'reports') {
+      if (reportType === 'course' && !selectedReportCourse && courses.length > 0) {
+        setSelectedReportCourse(courses[0].course_code);
+      } else if (reportType === 'student' && !selectedReportStudent && students.length > 0) {
+        setSelectedReportStudent(students[0].student_id);
+      }
+    }
+  }, [courses, students, reportType, activeTab]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -228,6 +292,36 @@ export default function Dashboard() {
       console.error(err);
       alert('Network error logging attendance');
     }
+  };
+
+  const exportReportToCSV = () => {
+    if (reportData.length === 0) return;
+    
+    let csvContent = "\uFEFF"; // Unicode BOM for Excel compatibility
+    
+    if (reportType === 'course') {
+      csvContent += "Student ID,Student Name,Total Classes,Present,Late,Absent,Attendance Rate\n";
+      reportData.forEach(r => {
+        csvContent += `"${r.student_id}","${r.student_name}",${r.total_classes},${r.present_count},${r.late_count},${r.absent_count},${r.attendance_rate}%\n`;
+      });
+    } else {
+      csvContent += "Course Code,Course Name,Total Classes,Present,Late,Absent,Attendance Rate\n";
+      reportData.forEach(r => {
+        csvContent += `"${r.course_code}","${r.course_name}",${r.total_classes},${r.present_count},${r.late_count},${r.absent_count},${r.attendance_rate}%\n`;
+      });
+    }
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    const filename = reportType === 'course' 
+      ? `attendance_report_course_${selectedReportCourse || 'all'}.csv` 
+      : `attendance_report_student_${selectedReportStudent || 'all'}.csv`;
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const renderOverview = () => {
@@ -513,6 +607,167 @@ export default function Dashboard() {
     );
   };
 
+  const renderReports = () => {
+    return (
+      <>
+        <div className="dashboard-header">
+          <div>
+            <h1>Attendance Reports</h1>
+            <span className="date">Export and review attendance statistics</span>
+          </div>
+          {reportData.length > 0 && (
+            <button className="btn btn-outline" onClick={exportReportToCSV}>
+              📥 Export CSV
+            </button>
+          )}
+        </div>
+
+        {/* Report Type Toggle & Filters */}
+        <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', alignItems: 'center' }}>
+            <div className="input-group" style={{ flex: '0 0 auto', width: '200px' }}>
+              <label>Report Type</label>
+              <select
+                className="input-field"
+                style={{ background: '#111827', color: '#fff', cursor: 'pointer' }}
+                value={reportType}
+                onChange={(e) => {
+                  setReportType(e.target.value);
+                  setReportData([]);
+                }}
+              >
+                <option value="course">Course Report</option>
+                <option value="student">Student Report</option>
+              </select>
+            </div>
+
+            {reportType === 'course' ? (
+              <div className="input-group" style={{ flex: '1 1 250px' }}>
+                <label htmlFor="course_report_select">Select Course</label>
+                <select
+                  id="course_report_select"
+                  className="input-field"
+                  style={{ background: '#111827', color: '#fff', cursor: 'pointer' }}
+                  value={selectedReportCourse}
+                  onChange={(e) => setSelectedReportCourse(e.target.value)}
+                >
+                  <option value="">-- Choose Course --</option>
+                  {courses.map(c => (
+                    <option key={c.id} value={c.course_code}>{c.course_code} - {c.course_name}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="input-group" style={{ flex: '1 1 250px' }}>
+                <label htmlFor="student_report_select">Select Student</label>
+                <select
+                  id="student_report_select"
+                  className="input-field"
+                  style={{ background: '#111827', color: '#fff', cursor: 'pointer' }}
+                  value={selectedReportStudent}
+                  onChange={(e) => setSelectedReportStudent(e.target.value)}
+                >
+                  <option value="">-- Choose Student --</option>
+                  {students.map(s => (
+                    <option key={s.id} value={s.student_id}>{s.student_id} - {s.full_name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Report Data Table */}
+        <div className="glass-card table-card">
+          <div className="table-card-header">
+            <h2>
+              {reportType === 'course' 
+                ? `Course Summary: ${selectedReportCourse || 'Select a course'}` 
+                : `Student Summary: ${selectedReportStudent || 'Select a student'}`}
+            </h2>
+          </div>
+
+          {reportLoading ? (
+             <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+               Generating report summary...
+             </div>
+          ) : (
+            <table className="data-table">
+              <thead>
+                {reportType === 'course' ? (
+                  <tr>
+                    <th>Student ID</th>
+                    <th>Student Name</th>
+                    <th>Total Classes</th>
+                    <th>Present</th>
+                    <th>Late</th>
+                    <th>Absent</th>
+                    <th>Attendance Rate</th>
+                  </tr>
+                ) : (
+                  <tr>
+                    <th>Course Code</th>
+                    <th>Course Name</th>
+                    <th>Total Classes</th>
+                    <th>Present</th>
+                    <th>Late</th>
+                    <th>Absent</th>
+                    <th>Attendance Rate</th>
+                  </tr>
+                )}
+              </thead>
+              <tbody>
+                {reportData.map((row, idx) => {
+                  const rate = row.attendance_rate;
+                  let rateClass = 'status-badge present'; // Teal/Green for high
+                  if (rate < 75) rateClass = 'status-badge absent'; // Red for low
+                  else if (rate < 90) rateClass = 'status-badge late'; // Yellow/Amber for moderate
+                  
+                  return reportType === 'course' ? (
+                    <tr key={idx}>
+                      <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{row.student_id}</td>
+                      <td style={{ fontWeight: 500 }}>{row.student_name}</td>
+                      <td>{row.total_classes}</td>
+                      <td style={{ color: 'var(--success)' }}>{row.present_count}</td>
+                      <td style={{ color: 'var(--warning)' }}>{row.late_count}</td>
+                      <td style={{ color: 'var(--danger)' }}>{row.absent_count}</td>
+                      <td>
+                        <span className={rateClass}>
+                          {rate}%
+                        </span>
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr key={idx}>
+                      <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{row.course_code}</td>
+                      <td style={{ fontWeight: 500 }}>{row.course_name}</td>
+                      <td>{row.total_classes}</td>
+                      <td style={{ color: 'var(--success)' }}>{row.present_count}</td>
+                      <td style={{ color: 'var(--warning)' }}>{row.late_count}</td>
+                      <td style={{ color: 'var(--danger)' }}>{row.absent_count}</td>
+                      <td>
+                        <span className={rateClass}>
+                          {rate}%
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {reportData.length === 0 && (
+                  <tr>
+                    <td colSpan="7" style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '3rem' }}>
+                      Select a filter above to populate the attendance report summary.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </>
+    );
+  };
+
   const renderPlaceholder = () => {
     const item = SIDEBAR_ITEMS.find(i => i.id === activeTab);
     return (
@@ -581,7 +836,8 @@ export default function Dashboard() {
           {activeTab === 'students' && renderStudents()}
           {activeTab === 'courses' && renderCourses()}
           {activeTab === 'attendance' && renderAttendance()}
-          {!['overview', 'students', 'courses', 'attendance'].includes(activeTab) && renderPlaceholder()}
+          {activeTab === 'reports' && renderReports()}
+          {!['overview', 'students', 'courses', 'attendance', 'reports'].includes(activeTab) && renderPlaceholder()}
         </main>
       </div>
 
