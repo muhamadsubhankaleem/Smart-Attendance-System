@@ -23,4 +23,4 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
     # Face encodings
     await db.face_encodings.create_index("student_id", unique=True)
 
-    print("✅ MongoDB indexes ready")
+    print("[OK] MongoDB indexes ready")

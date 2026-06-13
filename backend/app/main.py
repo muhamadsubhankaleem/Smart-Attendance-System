@@ -1,3 +1,10 @@
+import sys, os
+# ── Fix Python path so "from app.xxx" works no matter how you launch ──
+# Adds the "backend" directory to sys.path so Python finds the "app" package.
+_backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if _backend_dir not in sys.path:
+    sys.path.insert(0, _backend_dir)
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,7 +21,7 @@ async def lifespan(app: FastAPI):
     await connect_db()
     db = await get_db()
     await create_indexes(db)
-    print(f"🚀 {settings.APP_NAME} API is running")
+    print(f"[OK] {settings.APP_NAME} API is running")
     yield
     await close_db()
 
@@ -45,3 +52,8 @@ app.include_router(v1_router)
 @app.get("/health", tags=["Health"])
 async def health():
     return {"status": "ok", "service": settings.APP_NAME, "version": "1.0.0"}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)
