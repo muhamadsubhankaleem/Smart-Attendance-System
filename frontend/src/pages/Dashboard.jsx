@@ -25,6 +25,83 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
+  const [courses, setCourses] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [attendance, setAttendance] = useState([]);
+  const [stats, setStats] = useState({
+    total_students: 0,
+    active_courses: 0,
+    attendance_rate: 100,
+    sessions_today: 0
+  });
+
+  // Modal States
+  const [showCourseModal, setShowCourseModal] = useState(false);
+  const [showStudentModal, setShowStudentModal] = useState(false);
+  const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+
+  // Form States
+  const [courseForm, setCourseForm] = useState({ course_code: '', course_name: '', description: '' });
+  const [studentForm, setStudentForm] = useState({ student_id: '', full_name: '', email: '' });
+  const [attendanceForm, setAttendanceForm] = useState({
+    student_id: '',
+    course_code: '',
+    date: new Date().toISOString().split('T')[0],
+    status: 'present'
+  });
+
+  const fetchStats = async () => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`/api/v1/auth/stats?token=${encodeURIComponent(token)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setStats(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchCourses = async () => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`/api/v1/auth/courses?token=${encodeURIComponent(token)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCourses(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchStudents = async () => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`/api/v1/auth/students?token=${encodeURIComponent(token)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setStudents(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchAttendance = async () => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`/api/v1/auth/attendance?token=${encodeURIComponent(token)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setAttendance(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     const fetchUser = async () => {
       const token = localStorage.getItem('token');
@@ -51,6 +128,23 @@ export default function Dashboard() {
     fetchUser();
   }, [navigate]);
 
+  useEffect(() => {
+    if (user) {
+      if (activeTab === 'overview') {
+        fetchStats();
+        fetchAttendance();
+      } else if (activeTab === 'courses') {
+        fetchCourses();
+      } else if (activeTab === 'students') {
+        fetchStudents();
+      } else if (activeTab === 'attendance') {
+        fetchAttendance();
+        fetchCourses();
+        fetchStudents();
+      }
+    }
+  }, [activeTab, user]);
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     navigate('/');
@@ -59,6 +153,383 @@ export default function Dashboard() {
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   });
+
+  const handleCourseSubmit = async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`/api/v1/auth/courses?token=${encodeURIComponent(token)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(courseForm),
+      });
+      if (res.ok) {
+        setShowCourseModal(false);
+        setCourseForm({ course_code: '', course_name: '', description: '' });
+        fetchCourses();
+      } else {
+        const data = await res.json();
+        alert(data.detail || 'Failed to add course');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error adding course');
+    }
+  };
+
+  const handleStudentSubmit = async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`/api/v1/auth/students?token=${encodeURIComponent(token)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(studentForm),
+      });
+      if (res.ok) {
+        setShowStudentModal(false);
+        setStudentForm({ student_id: '', full_name: '', email: '' });
+        fetchStudents();
+        fetchStats();
+      } else {
+        const data = await res.json();
+        alert(data.detail || 'Failed to add student');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error adding student');
+    }
+  };
+
+  const handleAttendanceSubmit = async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`/api/v1/auth/attendance?token=${encodeURIComponent(token)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(attendanceForm),
+      });
+      if (res.ok) {
+        setShowAttendanceModal(false);
+        setAttendanceForm({
+          student_id: students[0]?.student_id || '',
+          course_code: courses[0]?.course_code || '',
+          date: new Date().toISOString().split('T')[0],
+          status: 'present'
+        });
+        fetchAttendance();
+        fetchStats();
+      } else {
+        const data = await res.json();
+        alert(data.detail || 'Failed to log attendance');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error logging attendance');
+    }
+  };
+
+  const renderOverview = () => {
+    return (
+      <>
+        <div className="dashboard-header">
+          <div>
+            <h1>Overview</h1>
+            <span className="date">{today}</span>
+          </div>
+          <button className="btn btn-primary" onClick={() => {
+            if (courses.length > 0 && students.length > 0) {
+              setAttendanceForm({
+                student_id: students[0].student_id,
+                course_code: courses[0].course_code,
+                date: new Date().toISOString().split('T')[0],
+                status: 'present'
+              });
+            }
+            setShowAttendanceModal(true);
+          }}>
+            + Log Attendance
+          </button>
+        </div>
+
+        <div className="stats-grid">
+          <div className="glass-card stats-card">
+            <div className="stats-card-header">
+              <div>
+                <div className="value">{stats.total_students}</div>
+                <div className="label">Total Students</div>
+              </div>
+              <div className="stats-card-icon teal">👥</div>
+            </div>
+            <div className="change positive">Registered in system</div>
+          </div>
+
+          <div className="glass-card stats-card">
+            <div className="stats-card-header">
+              <div>
+                <div className="value">{stats.active_courses}</div>
+                <div className="label">Active Courses</div>
+              </div>
+              <div className="stats-card-icon cyan">📚</div>
+            </div>
+            <div className="change positive">Courses configured</div>
+          </div>
+
+          <div className="glass-card stats-card">
+            <div className="stats-card-header">
+              <div>
+                <div className="value">{stats.attendance_rate}%</div>
+                <div className="label">Attendance Rate</div>
+              </div>
+              <div className="stats-card-icon green">📊</div>
+            </div>
+            <div className="change positive">Present & Late logs</div>
+          </div>
+
+          <div className="glass-card stats-card">
+            <div className="stats-card-header">
+              <div>
+                <div className="value">{stats.sessions_today}</div>
+                <div className="label">Active Courses Today</div>
+              </div>
+              <div className="stats-card-icon amber">📅</div>
+            </div>
+            <div className="change positive">Updated in real-time</div>
+          </div>
+        </div>
+
+        <div className="glass-card table-card">
+          <div className="table-card-header">
+            <h2>Recent Attendance</h2>
+            <button className="btn btn-outline" style={{ fontSize: 'var(--font-xs)' }} onClick={() => setActiveTab('attendance')}>
+              View All
+            </button>
+          </div>
+
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Student ID</th>
+                <th>Student Name</th>
+                <th>Course</th>
+                <th>Date</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {attendance.slice(0, 5).map((row) => (
+                <tr key={row.id}>
+                  <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{row.student_id}</td>
+                  <td style={{ fontWeight: 500 }}>{row.student_name}</td>
+                  <td>{row.course_code}</td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{row.date}</td>
+                  <td>
+                    <span className={`status-badge ${row.status}`}>
+                      {row.status === 'present' && '●'}
+                      {row.status === 'absent' && '●'}
+                      {row.status === 'late' && '●'}
+                      {' '}{row.status.charAt(0).toUpperCase() + row.status.slice(1)}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {attendance.length === 0 && (
+                <tr>
+                  <td colSpan="5" style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem' }}>
+                    No attendance logged yet. Click "+ Log Attendance" to add one!
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </>
+    );
+  };
+
+  const renderStudents = () => {
+    return (
+      <>
+        <div className="dashboard-header">
+          <div>
+            <h1>Student Management</h1>
+            <span className="date">Register and manage academic students</span>
+          </div>
+          <button className="btn btn-primary" onClick={() => setShowStudentModal(true)}>
+            + Add Student
+          </button>
+        </div>
+
+        <div className="glass-card table-card">
+          <div className="table-card-header">
+            <h2>Registered Students</h2>
+          </div>
+
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Student ID</th>
+                <th>Full Name</th>
+                <th>Email Address</th>
+              </tr>
+            </thead>
+            <tbody>
+              {students.map((s) => (
+                <tr key={s.id}>
+                  <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{s.student_id}</td>
+                  <td style={{ fontWeight: 500 }}>{s.full_name}</td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{s.email || 'No email provided'}</td>
+                </tr>
+              ))}
+              {students.length === 0 && (
+                <tr>
+                  <td colSpan="3" style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem' }}>
+                    No students registered yet. Click "+ Add Student" to register one!
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </>
+    );
+  };
+
+  const renderCourses = () => {
+    return (
+      <>
+        <div className="dashboard-header">
+          <div>
+            <h1>Course Management</h1>
+            <span className="date">Manage active academic courses</span>
+          </div>
+          <button className="btn btn-primary" onClick={() => setShowCourseModal(true)}>
+            + Add Course
+          </button>
+        </div>
+
+        <div className="glass-card table-card">
+          <div className="table-card-header">
+            <h2>Active Courses</h2>
+          </div>
+
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Course Code</th>
+                <th>Course Name</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              {courses.map((c) => (
+                <tr key={c.id}>
+                  <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{c.course_code}</td>
+                  <td style={{ fontWeight: 500 }}>{c.course_name}</td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{c.description || 'No description provided'}</td>
+                </tr>
+              ))}
+              {courses.length === 0 && (
+                <tr>
+                  <td colSpan="3" style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem' }}>
+                    No courses found. Click "+ Add Course" to create one!
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </>
+    );
+  };
+
+  const renderAttendance = () => {
+    return (
+      <>
+        <div className="dashboard-header">
+          <div>
+            <h1>Attendance Logs</h1>
+            <span className="date">Track and log student attendance records</span>
+          </div>
+          <button className="btn btn-primary" onClick={() => {
+            if (courses.length > 0 && students.length > 0) {
+              setAttendanceForm({
+                student_id: students[0].student_id,
+                course_code: courses[0].course_code,
+                date: new Date().toISOString().split('T')[0],
+                status: 'present'
+              });
+            }
+            setShowAttendanceModal(true);
+          }}>
+            + Log Attendance
+          </button>
+        </div>
+
+        <div className="glass-card table-card">
+          <div className="table-card-header">
+            <h2>Attendance History</h2>
+          </div>
+
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Student ID</th>
+                <th>Student Name</th>
+                <th>Course</th>
+                <th>Date</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {attendance.map((row) => (
+                <tr key={row.id}>
+                  <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{row.student_id}</td>
+                  <td style={{ fontWeight: 500 }}>{row.student_name}</td>
+                  <td>{row.course_code}</td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{row.date}</td>
+                  <td>
+                    <span className={`status-badge ${row.status}`}>
+                      {row.status === 'present' && '●'}
+                      {row.status === 'absent' && '●'}
+                      {row.status === 'late' && '●'}
+                      {' '}{row.status.charAt(0).toUpperCase() + row.status.slice(1)}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {attendance.length === 0 && (
+                <tr>
+                  <td colSpan="5" style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem' }}>
+                    No attendance records found. Click "+ Log Attendance" to start!
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </>
+    );
+  };
+
+  const renderPlaceholder = () => {
+    const item = SIDEBAR_ITEMS.find(i => i.id === activeTab);
+    return (
+      <div style={{ padding: '4rem 2rem', textAlign: 'center' }}>
+        <div className="glass-card" style={{ maxWidth: '500px', margin: '0 auto', padding: '3rem 2rem' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>{item?.icon || '⚙️'}</div>
+          <h2>{item?.label} Feature</h2>
+          <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem', marginBottom: '2rem' }}>
+            We are working hard to bring this feature to life. Stay tuned!
+          </p>
+          <button className="btn btn-outline" onClick={() => setActiveTab('overview')}>
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   if (loading) {
     return (
@@ -106,102 +577,215 @@ export default function Dashboard() {
 
         {/* Main Content */}
         <main className="dashboard-main">
-          <div className="dashboard-header">
-            <div>
-              <h1>Dashboard</h1>
-              <span className="date">{today}</span>
-            </div>
-            <button className="btn btn-primary">
-              + New Session
-            </button>
-          </div>
-
-          {/* Stats */}
-          <div className="stats-grid">
-            <div className="glass-card stats-card">
-              <div className="stats-card-header">
-                <div>
-                  <div className="value">1,247</div>
-                  <div className="label">Total Students</div>
-                </div>
-                <div className="stats-card-icon teal">👥</div>
-              </div>
-              <div className="change positive">+12% from last month</div>
-            </div>
-
-            <div className="glass-card stats-card">
-              <div className="stats-card-header">
-                <div>
-                  <div className="value">48</div>
-                  <div className="label">Active Courses</div>
-                </div>
-                <div className="stats-card-icon cyan">📚</div>
-              </div>
-              <div className="change positive">+3 new this semester</div>
-            </div>
-
-            <div className="glass-card stats-card">
-              <div className="stats-card-header">
-                <div>
-                  <div className="value">94.2%</div>
-                  <div className="label">Attendance Rate</div>
-                </div>
-                <div className="stats-card-icon green">📊</div>
-              </div>
-              <div className="change positive">+2.1% this week</div>
-            </div>
-
-            <div className="glass-card stats-card">
-              <div className="stats-card-header">
-                <div>
-                  <div className="value">23</div>
-                  <div className="label">Sessions Today</div>
-                </div>
-                <div className="stats-card-icon amber">📅</div>
-              </div>
-              <div className="change negative">5 remaining</div>
-            </div>
-          </div>
-
-          {/* Recent Attendance Table */}
-          <div className="glass-card table-card">
-            <div className="table-card-header">
-              <h2>Recent Attendance</h2>
-              <button className="btn btn-outline" style={{ fontSize: 'var(--font-xs)' }}>
-                View All
-              </button>
-            </div>
-
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Student</th>
-                  <th>Course</th>
-                  <th>Date</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {MOCK_ATTENDANCE.map((row) => (
-                  <tr key={row.id}>
-                    <td style={{ fontWeight: 500 }}>{row.student}</td>
-                    <td>{row.course}</td>
-                    <td style={{ color: 'var(--text-secondary)' }}>{row.date}</td>
-                    <td>
-                      <span className={`status-badge ${row.status}`}>
-                        {row.status === 'present' && '●'}
-                        {row.status === 'absent' && '●'}
-                        {row.status === 'late' && '●'}
-                        {' '}{row.status.charAt(0).toUpperCase() + row.status.slice(1)}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {activeTab === 'overview' && renderOverview()}
+          {activeTab === 'students' && renderStudents()}
+          {activeTab === 'courses' && renderCourses()}
+          {activeTab === 'attendance' && renderAttendance()}
+          {!['overview', 'students', 'courses', 'attendance'].includes(activeTab) && renderPlaceholder()}
         </main>
       </div>
+
+      {/* Course Add Modal */}
+      {showCourseModal && (
+        <div className="modal-overlay" onClick={() => setShowCourseModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Add New Course</h2>
+              <button className="modal-close-btn" onClick={() => setShowCourseModal(false)}>&times;</button>
+            </div>
+            <form onSubmit={handleCourseSubmit} className="auth-form">
+              <div className="modal-body">
+                <div className="input-group" style={{ marginBottom: '1rem' }}>
+                  <label htmlFor="course_code">Course Code</label>
+                  <input
+                    id="course_code"
+                    type="text"
+                    className="input-field"
+                    placeholder="e.g. CS-301"
+                    value={courseForm.course_code}
+                    onChange={(e) => setCourseForm({ ...courseForm, course_code: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="input-group" style={{ marginBottom: '1rem' }}>
+                  <label htmlFor="course_name">Course Name</label>
+                  <input
+                    id="course_name"
+                    type="text"
+                    className="input-field"
+                    placeholder="e.g. Advanced Algorithms"
+                    value={courseForm.course_name}
+                    onChange={(e) => setCourseForm({ ...courseForm, course_name: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="input-group">
+                  <label htmlFor="description">Description (Optional)</label>
+                  <textarea
+                    id="description"
+                    className="input-field"
+                    style={{ minHeight: '80px', resize: 'vertical', fontFamily: 'inherit', padding: '0.75rem' }}
+                    placeholder="Brief course information"
+                    value={courseForm.description}
+                    onChange={(e) => setCourseForm({ ...courseForm, description: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-ghost" onClick={() => setShowCourseModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary">Add Course</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Student Add Modal */}
+      {showStudentModal && (
+        <div className="modal-overlay" onClick={() => setShowStudentModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Add New Student</h2>
+              <button className="modal-close-btn" onClick={() => setShowStudentModal(false)}>&times;</button>
+            </div>
+            <form onSubmit={handleStudentSubmit} className="auth-form">
+              <div className="modal-body">
+                <div className="input-group" style={{ marginBottom: '1rem' }}>
+                  <label htmlFor="student_id">Student ID / Roll No</label>
+                  <input
+                    id="student_id"
+                    type="text"
+                    className="input-field"
+                    placeholder="e.g. STU-2026-001"
+                    value={studentForm.student_id}
+                    onChange={(e) => setStudentForm({ ...studentForm, student_id: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="input-group" style={{ marginBottom: '1rem' }}>
+                  <label htmlFor="full_name">Full Name</label>
+                  <input
+                    id="full_name"
+                    type="text"
+                    className="input-field"
+                    placeholder="e.g. Ahmad Raza"
+                    value={studentForm.full_name}
+                    onChange={(e) => setStudentForm({ ...studentForm, full_name: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="input-group">
+                  <label htmlFor="email">Email Address (Optional)</label>
+                  <input
+                    id="email"
+                    type="email"
+                    className="input-field"
+                    placeholder="e.g. ahmad@example.com"
+                    value={studentForm.email}
+                    onChange={(e) => setStudentForm({ ...studentForm, email: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-ghost" onClick={() => setShowStudentModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary">Add Student</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Attendance Log Modal */}
+      {showAttendanceModal && (
+        <div className="modal-overlay" onClick={() => setShowAttendanceModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Log Attendance</h2>
+              <button className="modal-close-btn" onClick={() => setShowAttendanceModal(false)}>&times;</button>
+            </div>
+            <form onSubmit={handleAttendanceSubmit} className="auth-form">
+              <div className="modal-body">
+                {courses.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '1rem 0', color: 'var(--text-secondary)' }}>
+                    Please add at least one course first before logging attendance.
+                  </div>
+                ) : students.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '1rem 0', color: 'var(--text-secondary)' }}>
+                    Please add at least one student first before logging attendance.
+                  </div>
+                ) : (
+                  <>
+                    <div className="input-group" style={{ marginBottom: '1rem' }}>
+                      <label htmlFor="student_select">Select Student</label>
+                      <select
+                        id="student_select"
+                        className="input-field"
+                        style={{ background: '#111827', color: '#fff', cursor: 'pointer' }}
+                        value={attendanceForm.student_id}
+                        onChange={(e) => setAttendanceForm({ ...attendanceForm, student_id: e.target.value })}
+                        required
+                      >
+                        {students.map((s) => (
+                          <option key={s.id} value={s.student_id}>
+                            {s.student_id} - {s.full_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="input-group" style={{ marginBottom: '1rem' }}>
+                      <label htmlFor="course_select">Select Course</label>
+                      <select
+                        id="course_select"
+                        className="input-field"
+                        style={{ background: '#111827', color: '#fff', cursor: 'pointer' }}
+                        value={attendanceForm.course_code}
+                        onChange={(e) => setAttendanceForm({ ...attendanceForm, course_code: e.target.value })}
+                        required
+                      >
+                        {courses.map((c) => (
+                          <option key={c.id} value={c.course_code}>
+                            {c.course_code} - {c.course_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="input-group" style={{ marginBottom: '1rem' }}>
+                      <label htmlFor="attendance_date">Date</label>
+                      <input
+                        id="attendance_date"
+                        type="date"
+                        className="input-field"
+                        value={attendanceForm.date}
+                        onChange={(e) => setAttendanceForm({ ...attendanceForm, date: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="input-group">
+                      <label htmlFor="status_select">Status</label>
+                      <select
+                        id="status_select"
+                        className="input-field"
+                        style={{ background: '#111827', color: '#fff', cursor: 'pointer' }}
+                        value={attendanceForm.status}
+                        onChange={(e) => setAttendanceForm({ ...attendanceForm, status: e.target.value })}
+                        required
+                      >
+                        <option value="present">Present</option>
+                        <option value="absent">Absent</option>
+                        <option value="late">Late</option>
+                      </select>
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="modal-overlay-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: 'var(--space-4)' }}>
+                <button type="button" className="btn btn-ghost" onClick={() => setShowAttendanceModal(false)}>Cancel</button>
+                {courses.length > 0 && students.length > 0 && <button type="submit" className="btn btn-primary">Log Record</button>}
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   );
 }

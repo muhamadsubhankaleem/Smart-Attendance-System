@@ -5,7 +5,9 @@ from app.db import get_db
 from app.models import (
     User, UserCreate, UserLogin, UserResponse, TokenResponse,
     Course, CourseCreate, CourseResponse,
-    Attendance, AttendanceCreate, AttendanceResponse, StatsResponse
+    Student, StudentCreate, StudentResponse,
+    Attendance, AttendanceCreate, AttendanceResponse, StatsResponse,
+    CourseReportRow, StudentReportRow
 )
 from app.core.security import hash_password, verify_password, create_access_token, decode_token
 from datetime import date
@@ -100,12 +102,55 @@ async def create_course(body: CourseCreate, token: str = "", db: AsyncSession = 
     return course
 
 
+# ── Students Endpoints ──
+@router.get("/students", response_model=list[StudentResponse])
+async def get_students(token: str = "", db: AsyncSession = Depends(get_db)):
+    verify_auth(token)
+    result = await db.execute(select(Student))
+    return result.scalars().all()
+
+
+@router.post("/students", response_model=StudentResponse)
+async def create_student(body: StudentCreate, token: str = "", db: AsyncSession = Depends(get_db)):
+    verify_auth(token)
+    existing = await db.execute(select(Student).where(Student.student_id == body.student_id))
+    if existing.scalar_one_or_none():
+        raise HTTPException(400, "Student ID already exists")
+    
+    student = Student(
+        student_id=body.student_id,
+        full_name=body.full_name,
+        email=body.email,
+    )
+    db.add(student)
+    await db.commit()
+    await db.refresh(student)
+    return student
+
+
 # ── Attendance Endpoints ──
 @router.get("/attendance", response_model=list[AttendanceResponse])
 async def get_attendance(token: str = "", db: AsyncSession = Depends(get_db)):
     verify_auth(token)
-    result = await db.execute(select(Attendance).order_by(Attendance.id.desc()))
-    return result.scalars().all()
+    stmt = (
+        select(Attendance, Student.full_name)
+        .join(Student, Attendance.student_id == Student.student_id)
+        .order_by(Attendance.id.desc())
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+    
+    output = []
+    for att, name in rows:
+        output.append(AttendanceResponse(
+            id=att.id,
+            student_id=att.student_id,
+            student_name=name,
+            course_code=att.course_code,
+            date=att.date,
+            status=att.status
+        ))
+    return output
 
 
 @router.post("/attendance", response_model=AttendanceResponse)
@@ -117,9 +162,14 @@ async def create_attendance(body: AttendanceCreate, token: str = "", db: AsyncSe
     course_exist = await db.execute(select(Course).where(Course.course_code == body.course_code))
     if not course_exist.scalar_one_or_none():
         raise HTTPException(400, f"Course with code '{body.course_code}' does not exist")
+        
+    student_exist = await db.execute(select(Student).where(Student.student_id == body.student_id))
+    student = student_exist.scalar_one_or_none()
+    if not student:
+        raise HTTPException(400, f"Student with ID '{body.student_id}' does not exist")
     
     attendance = Attendance(
-        student_name=body.student_name,
+        student_id=body.student_id,
         course_code=body.course_code,
         date=body.date,
         status=body.status,
@@ -127,15 +177,23 @@ async def create_attendance(body: AttendanceCreate, token: str = "", db: AsyncSe
     db.add(attendance)
     await db.commit()
     await db.refresh(attendance)
-    return attendance
+    
+    return AttendanceResponse(
+        id=attendance.id,
+        student_id=attendance.student_id,
+        student_name=student.full_name,
+        course_code=attendance.course_code,
+        date=attendance.date,
+        status=attendance.status
+    )
 
 
 @router.get("/stats", response_model=StatsResponse)
 async def get_stats(token: str = "", db: AsyncSession = Depends(get_db)):
     verify_auth(token)
     
-    # 1. Total unique students
-    res_students = await db.execute(select(func.count(func.distinct(Attendance.student_name))))
+    # 1. Total active students (registered in students table)
+    res_students = await db.execute(select(func.count(Student.id)))
     total_students = res_students.scalar() or 0
     
     # 2. Total active courses
@@ -151,7 +209,7 @@ async def get_stats(token: str = "", db: AsyncSession = Depends(get_db)):
         present_att = res_present.scalar() or 0
         attendance_rate = round((present_att / total_att) * 100.0, 1)
     else:
-        attendance_rate = 100.0  # Default to 100%
+        attendance_rate = 100.0
         
     # 4. Sessions today (count of unique courses attended today)
     today_str = date.today().isoformat()
@@ -164,3 +222,84 @@ async def get_stats(token: str = "", db: AsyncSession = Depends(get_db)):
         attendance_rate=attendance_rate,
         sessions_today=sessions_today,
     )
+
+
+# ── Reports Endpoints ──
+@router.get("/reports/course/{course_code}", response_model=list[CourseReportRow])
+async def get_course_report(course_code: str, token: str = "", db: AsyncSession = Depends(get_db)):
+    verify_auth(token)
+    
+    course_res = await db.execute(select(Course).where(Course.course_code == course_code))
+    if not course_res.scalar_one_or_none():
+        raise HTTPException(400, f"Course with code '{course_code}' does not exist")
+        
+    students_res = await db.execute(select(Student))
+    students = students_res.scalars().all()
+    
+    report = []
+    for s in students:
+        stmt = select(Attendance).where(
+            (Attendance.student_id == s.student_id) & 
+            (Attendance.course_code == course_code)
+        )
+        logs_res = await db.execute(stmt)
+        logs = logs_res.scalars().all()
+        
+        total = len(logs)
+        present = sum(1 for l in logs if l.status == "present")
+        late = sum(1 for l in logs if l.status == "late")
+        absent = sum(1 for l in logs if l.status == "absent")
+        
+        rate = round(((present + late) / total) * 100.0, 1) if total > 0 else 100.0
+        
+        report.append(CourseReportRow(
+            student_id=s.student_id,
+            student_name=s.full_name,
+            total_classes=total,
+            present_count=present,
+            late_count=late,
+            absent_count=absent,
+            attendance_rate=rate
+        ))
+        
+    return report
+
+
+@router.get("/reports/student/{student_id}", response_model=list[StudentReportRow])
+async def get_student_report(student_id: str, token: str = "", db: AsyncSession = Depends(get_db)):
+    verify_auth(token)
+    
+    student_res = await db.execute(select(Student).where(Student.student_id == student_id))
+    if not student_res.scalar_one_or_none():
+        raise HTTPException(400, f"Student with ID '{student_id}' does not exist")
+        
+    courses_res = await db.execute(select(Course))
+    courses = courses_res.scalars().all()
+    
+    report = []
+    for c in courses:
+        stmt = select(Attendance).where(
+            (Attendance.student_id == student_id) & 
+            (Attendance.course_code == c.course_code)
+        )
+        logs_res = await db.execute(stmt)
+        logs = logs_res.scalars().all()
+        
+        total = len(logs)
+        present = sum(1 for l in logs if l.status == "present")
+        late = sum(1 for l in logs if l.status == "late")
+        absent = sum(1 for l in logs if l.status == "absent")
+        
+        rate = round(((present + late) / total) * 100.0, 1) if total > 0 else 100.0
+        
+        report.append(StudentReportRow(
+            course_code=c.course_code,
+            course_name=c.course_name,
+            total_classes=total,
+            present_count=present,
+            late_count=late,
+            absent_count=absent,
+            attendance_rate=rate
+        ))
+        
+    return report

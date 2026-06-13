@@ -23,11 +23,20 @@ class Course(Base):
     description = Column(String(255), nullable=True)
 
 
+class Student(Base):
+    __tablename__ = "students"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    student_id = Column(String(20), unique=True, nullable=False, index=True)
+    full_name = Column(String(100), nullable=False)
+    email = Column(String(255), nullable=True)
+
+
 class Attendance(Base):
     __tablename__ = "attendance"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    student_name = Column(String(100), nullable=False)
+    student_id = Column(String(20), nullable=False)
     course_code = Column(String(20), nullable=False)
     date = Column(String(10), nullable=False)  # YYYY-MM-DD
     status = Column(String(20), nullable=False)  # present, absent, late
@@ -74,8 +83,24 @@ class CourseResponse(BaseModel):
         from_attributes = True
 
 
+class StudentCreate(BaseModel):
+    student_id: str
+    full_name: str
+    email: str | None = None
+
+
+class StudentResponse(BaseModel):
+    id: int
+    student_id: str
+    full_name: str
+    email: str | None
+
+    class Config:
+        from_attributes = True
+
+
 class AttendanceCreate(BaseModel):
-    student_name: str
+    student_id: str
     course_code: str
     date: str
     status: str
@@ -83,6 +108,7 @@ class AttendanceCreate(BaseModel):
 
 class AttendanceResponse(BaseModel):
     id: int
+    student_id: str
     student_name: str
     course_code: str
     date: str
@@ -97,4 +123,25 @@ class StatsResponse(BaseModel):
     active_courses: int
     attendance_rate: float
     sessions_today: int
+
+
+class CourseReportRow(BaseModel):
+    student_id: str
+    student_name: str
+    total_classes: int
+    present_count: int
+    late_count: int
+    absent_count: int
+    attendance_rate: float
+
+
+class StudentReportRow(BaseModel):
+    course_code: str
+    course_name: str
+    total_classes: int
+    present_count: int
+    late_count: int
+    absent_count: int
+    attendance_rate: float
+
 
