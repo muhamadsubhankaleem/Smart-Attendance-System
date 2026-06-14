@@ -3,6 +3,7 @@ import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import NotFound from './pages/NotFound';
+import AttendanceRecords from './pages/AttendanceRecords';
 
 export default function App() {
   return (
@@ -12,6 +13,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Login isRegister />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/attendance" element={<AttendanceRecords />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>

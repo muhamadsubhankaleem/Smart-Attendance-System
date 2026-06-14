@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from sqlalchemy import Column, Integer, String
 from app.db import Base
 
@@ -79,8 +79,7 @@ class CourseResponse(BaseModel):
     course_name: str
     description: str | None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class StudentCreate(BaseModel):
@@ -95,8 +94,7 @@ class StudentResponse(BaseModel):
     full_name: str
     email: str | None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AttendanceCreate(BaseModel):
@@ -114,8 +112,7 @@ class AttendanceResponse(BaseModel):
     date: str
     status: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class StatsResponse(BaseModel):

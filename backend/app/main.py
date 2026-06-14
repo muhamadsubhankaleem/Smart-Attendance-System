@@ -40,6 +40,11 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/v1")
 
 
+@app.get("/", tags=["Root"]) 
+async def root():
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/docs")
+
 import traceback
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -51,9 +56,16 @@ async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": str(exc), "traceback": tb})
 
 
-@app.get("/health", tags=["Health"])
-async def health():
-    return {"status": "ok", "service": settings.APP_NAME, "version": "1.0.0"}
+@app.get("/api/v1/attendance", tags=["Attendance"])
+async def get_attendance():
+    """Return mock attendance records for frontend demonstration."""
+    sample = [
+        {"date": "2026-06-01", "student": "Alice Smith", "course": "Math 101", "status": "Present", "remarks": ""},
+        {"date": "2026-06-01", "student": "Bob Jones", "course": "Math 101", "status": "Absent", "remarks": "Sick"},
+        {"date": "2026-06-02", "student": "Charlie Brown", "course": "Physics 201", "status": "Present", "remarks": ""},
+        {"date": "2026-06-02", "student": "Dana Lee", "course": "Physics 201", "status": "Late", "remarks": "Traffic"},
+    ]
+    return sample
 
 
 if __name__ == "__main__":
