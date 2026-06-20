@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { QRCodeCanvas } from 'qrcode.react';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 
 const SIDEBAR_ITEMS = [
   { icon: '📊', label: 'Overview', id: 'overview' },
@@ -7,6 +9,7 @@ const SIDEBAR_ITEMS = [
   { icon: '📚', label: 'Courses', id: 'courses' },
   { icon: '✅', label: 'Attendance', id: 'attendance' },
   { icon: '📱', label: 'QR Sessions', id: 'qr' },
+  { icon: '📷', label: 'Scan QR', id: 'scan' },
   { icon: '📄', label: 'Reports', id: 'reports' },
 ];
 
@@ -18,6 +21,119 @@ const MOCK_ATTENDANCE = [
   { id: 5, student: 'Bilal Raza', course: 'CS-205', date: '2026-06-13', status: 'present' },
   { id: 6, student: 'Ayesha Malik', course: 'CS-301', date: '2026-06-12', status: 'present' },
 ];
+
+function ScanQRTab({ courses, students }) {
+  const [scanResult, setScanResult] = useState(null);
+  const [scanStatus, setScanStatus] = useState('');
+  const [studentId, setStudentId] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!scanResult) {
+      const scanner = new Html5QrcodeScanner('reader', { qrbox: { width: 250, height: 250 }, fps: 10 }, false);
+      scanner.render(
+        (result) => {
+          scanner.clear();
+          try {
+            const data = JSON.parse(result);
+            if (data.type === 'attendance') {
+              setScanResult(data);
+              setScanStatus('');
+            } else {
+              setScanStatus('Invalid QR Code type.');
+            }
+          } catch {
+            setScanStatus('Invalid QR Code format.');
+          }
+        },
+        (err) => { /* ignore */ }
+      );
+      return () => { scanner.clear().catch(e => console.error(e)); };
+    }
+  }, [scanResult]);
+
+  const handleSubmit = async () => {
+    if (!studentId || !scanResult) return;
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/v1/auth/attendance?token=${encodeURIComponent(token)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          student_id: studentId,
+          course_code: scanResult.course,
+          date: scanResult.date,
+          status: 'present'
+        })
+      });
+      if (res.ok) {
+        setScanStatus('Success! Attendance marked as Present.');
+      } else {
+        const error = await res.json();
+        setScanStatus(`Error: ${error.detail}`);
+      }
+    } catch (err) {
+      setScanStatus('Network error.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="dashboard-header">
+        <div>
+          <h1>Scan QR</h1>
+          <span className="date">Scan a session QR code to mark your attendance</span>
+        </div>
+      </div>
+      <div className="glass-card" style={{ maxWidth: '600px', margin: '0 auto', padding: '2rem' }}>
+        {!scanResult ? (
+          <>
+            <div id="reader" style={{ background: '#fff', borderRadius: '1rem', overflow: 'hidden' }}></div>
+            {scanStatus && <p style={{ color: 'var(--danger)', marginTop: '1rem', textAlign: 'center' }}>{scanStatus}</p>}
+          </>
+        ) : (
+          <div style={{ textAlign: 'center', animation: 'fadeInUp 0.3s ease-out' }}>
+            <h2 style={{ marginBottom: '1.5rem', color: 'var(--accent-primary-light)' }}>QR Code Scanned!</h2>
+            <div style={{ background: 'rgba(0,0,0,0.3)', padding: '1.5rem', borderRadius: '1rem', marginBottom: '1.5rem', textAlign: 'left' }}>
+              <p><strong>Course:</strong> {scanResult.course}</p>
+              <p><strong>Date:</strong> {scanResult.date}</p>
+            </div>
+            
+            <div className="input-group" style={{ textAlign: 'left' }}>
+              <label>Select Your Student ID to Confirm</label>
+              <select
+                className="input-field"
+                style={{ background: 'rgba(0,0,0,0.4)', color: '#fff' }}
+                value={studentId}
+                onChange={(e) => setStudentId(e.target.value)}
+              >
+                <option value="">-- Choose Student --</option>
+                {students.map(s => (
+                  <option key={s.id} value={s.student_id}>{s.student_id} - {s.full_name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+              <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setScanResult(null)}>Rescan</button>
+              <button className="btn btn-primary" style={{ flex: 1 }} disabled={!studentId || loading} onClick={handleSubmit}>
+                {loading ? 'Submitting...' : 'Mark Attendance'}
+              </button>
+            </div>
+            {scanStatus && (
+              <div style={{ marginTop: '1.5rem', padding: '1rem', borderRadius: '0.5rem', background: scanStatus.includes('Success') ? 'rgba(52,211,153,0.1)' : 'rgba(248,113,113,0.1)', color: scanStatus.includes('Success') ? 'var(--success)' : 'var(--danger)' }}>
+                {scanStatus}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -56,6 +172,10 @@ export default function Dashboard() {
     date: new Date().toISOString().split('T')[0],
     status: 'present'
   });
+
+  // QR Session States
+  const [qrSessionCourse, setQrSessionCourse] = useState('');
+  const [showQR, setShowQR] = useState(false);
 
   const fetchStats = async () => {
     const token = localStorage.getItem('token');
@@ -183,6 +303,9 @@ export default function Dashboard() {
         fetchCourses();
         fetchStudents();
       } else if (activeTab === 'reports') {
+        fetchCourses();
+        fetchStudents();
+      } else if (activeTab === 'scan' || activeTab === 'qr') {
         fetchCourses();
         fetchStudents();
       }
@@ -768,6 +891,69 @@ export default function Dashboard() {
     );
   };
 
+  const renderQRSession = () => {
+    return (
+      <>
+        <div className="dashboard-header">
+          <div>
+            <h1>QR Sessions</h1>
+            <span className="date">Generate a QR code for students to scan</span>
+          </div>
+        </div>
+
+        <div className="glass-card" style={{ maxWidth: '600px', margin: '0 auto', padding: '2.5rem 2rem' }}>
+          <div className="input-group">
+            <label>Select Course for Session</label>
+            <select
+              className="input-field"
+              style={{ background: 'rgba(0,0,0,0.4)', color: '#fff', cursor: 'pointer' }}
+              value={qrSessionCourse}
+              onChange={(e) => { setQrSessionCourse(e.target.value); setShowQR(false); }}
+            >
+              <option value="">-- Choose Course --</option>
+              {courses.map(c => (
+                <option key={c.id} value={c.course_code}>{c.course_code} - {c.course_name}</option>
+              ))}
+            </select>
+          </div>
+
+          <button 
+            className="btn btn-primary" 
+            style={{ width: '100%', marginTop: '1rem' }}
+            disabled={!qrSessionCourse}
+            onClick={() => setShowQR(true)}
+          >
+            Generate QR Code
+          </button>
+
+          {showQR && qrSessionCourse && (
+            <div style={{ marginTop: '2.5rem', textAlign: 'center', animation: 'fadeInUp 0.3s ease-out' }}>
+              <div style={{
+                background: '#fff',
+                padding: '1.5rem',
+                borderRadius: '1.5rem',
+                display: 'inline-block',
+                boxShadow: '0 20px 40px rgba(0,0,0,0.6)'
+              }}>
+                <QRCodeCanvas 
+                  value={JSON.stringify({ course: qrSessionCourse, date: new Date().toISOString().split('T')[0], type: 'attendance' })}
+                  size={240}
+                  level="H"
+                />
+              </div>
+              <p style={{ marginTop: '1.5rem', fontSize: '1.1rem', fontWeight: 600 }}>
+                Scan this code to mark attendance for <span style={{ color: 'var(--accent-primary-light)' }}>{qrSessionCourse}</span>
+              </p>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.25rem' }}>
+                Session Date: {new Date().toISOString().split('T')[0]}
+              </p>
+            </div>
+          )}
+        </div>
+      </>
+    );
+  };
+
   const renderPlaceholder = () => {
     const item = SIDEBAR_ITEMS.find(i => i.id === activeTab);
     return (
@@ -788,104 +974,113 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="auth-page" style={{ justifyContent: 'center', alignItems: 'center' }}>
-        <div className="orb orb-1" />
-        <div style={{ color: 'var(--text-primary)', fontSize: 'var(--font-lg)' }}>
-          Loading dashboard...
-        </div>
+      <div className="loading-page">
+        <div className="orb orb-1" style={{ opacity: 0.3 }} />
+        <div className="spinner" />
+        <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-sm)' }}>Loading dashboard…</p>
       </div>
     );
   }
 
+  const initials = (user?.full_name || 'U').split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2);
+
   return (
-    <>
-      {/* Navbar */}
-      <nav className="navbar scrolled">
-        <Link to="/" className="navbar-brand">
+    <div className="dashboard-layout">
+      {/* Sidebar */}
+      <aside className="sidebar">
+        <div className="sidebar-logo">
           <span className="brand-icon">SA</span>
           SmartAttend
-        </Link>
-        <div className="navbar-actions">
-          <span style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-sm)' }}>
-            Welcome, {user?.full_name || 'User'}
-          </span>
-          <button className="btn btn-ghost" onClick={handleLogout}>
-            Logout
+        </div>
+
+        <div className="sidebar-section-label">Main</div>
+        {SIDEBAR_ITEMS.slice(0, 4).map((item) => (
+          <button
+            key={item.id}
+            className={`sidebar-link ${activeTab === item.id ? 'active' : ''}`}
+            onClick={() => setActiveTab(item.id)}
+          >
+            <span className="icon">{item.icon}</span>
+            {item.label}
+          </button>
+        ))}
+
+        <div className="sidebar-section-label">Analytics</div>
+        {SIDEBAR_ITEMS.slice(4).map((item) => (
+          <button
+            key={item.id}
+            className={`sidebar-link ${activeTab === item.id ? 'active' : ''}`}
+            onClick={() => setActiveTab(item.id)}
+          >
+            <span className="icon">{item.icon}</span>
+            {item.label}
+          </button>
+        ))}
+
+        <div className="sidebar-spacer" />
+
+        <div className="sidebar-bottom">
+          <button className="sidebar-link" onClick={handleLogout}>
+            <span className="icon">🚪</span>
+            Sign Out
           </button>
         </div>
-      </nav>
+      </aside>
 
-      <div className="dashboard-layout">
-        {/* Sidebar */}
-        <aside className="sidebar">
-          {SIDEBAR_ITEMS.map((item) => (
-            <button
-              key={item.id}
-              className={`sidebar-link ${activeTab === item.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(item.id)}
-            >
-              <span className="icon">{item.icon}</span>
-              {item.label}
-            </button>
-          ))}
-        </aside>
-
-        {/* Main Content */}
-        <main className="dashboard-main">
-          {activeTab === 'overview' && renderOverview()}
-          {activeTab === 'students' && renderStudents()}
-          {activeTab === 'courses' && renderCourses()}
-          {activeTab === 'attendance' && renderAttendance()}
-          {activeTab === 'reports' && renderReports()}
-          {!['overview', 'students', 'courses', 'attendance', 'reports'].includes(activeTab) && renderPlaceholder()}
-        </main>
+      {/* Top Bar */}
+      <div className="top-bar">
+        <div className="top-bar-left">
+          <h2>{SIDEBAR_ITEMS.find(i => i.id === activeTab)?.label || 'Dashboard'}</h2>
+          <div className="breadcrumb">{today}</div>
+        </div>
+        <div className="top-bar-right">
+          <div className="user-pill">
+            <div className="user-avatar">{initials}</div>
+            <span className="user-name">{user?.full_name || 'User'}</span>
+          </div>
+        </div>
       </div>
+
+      {/* Main Content */}
+      <main className="dashboard-main">
+        {activeTab === 'overview' && renderOverview()}
+        {activeTab === 'students' && renderStudents()}
+        {activeTab === 'courses' && renderCourses()}
+        {activeTab === 'attendance' && renderAttendance()}
+        {activeTab === 'qr' && renderQRSession()}
+        {activeTab === 'scan' && <ScanQRTab courses={courses} students={students} />}
+        {activeTab === 'reports' && renderReports()}
+        {!['overview', 'students', 'courses', 'attendance', 'qr', 'scan', 'reports'].includes(activeTab) && renderPlaceholder()}
+      </main>
 
       {/* Course Add Modal */}
       {showCourseModal && (
         <div className="modal-overlay" onClick={() => setShowCourseModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Add New Course</h2>
-              <button className="modal-close-btn" onClick={() => setShowCourseModal(false)}>&times;</button>
+              <h2>➕ Add New Course</h2>
+              <button className="modal-close" onClick={() => setShowCourseModal(false)}>✕</button>
             </div>
-            <form onSubmit={handleCourseSubmit} className="auth-form">
-              <div className="modal-body">
-                <div className="input-group" style={{ marginBottom: '1rem' }}>
-                  <label htmlFor="course_code">Course Code</label>
-                  <input
-                    id="course_code"
-                    type="text"
-                    className="input-field"
-                    placeholder="e.g. CS-301"
-                    value={courseForm.course_code}
-                    onChange={(e) => setCourseForm({ ...courseForm, course_code: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="input-group" style={{ marginBottom: '1rem' }}>
-                  <label htmlFor="course_name">Course Name</label>
-                  <input
-                    id="course_name"
-                    type="text"
-                    className="input-field"
-                    placeholder="e.g. Advanced Algorithms"
-                    value={courseForm.course_name}
-                    onChange={(e) => setCourseForm({ ...courseForm, course_name: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="input-group">
-                  <label htmlFor="description">Description (Optional)</label>
-                  <textarea
-                    id="description"
-                    className="input-field"
-                    style={{ minHeight: '80px', resize: 'vertical', fontFamily: 'inherit', padding: '0.75rem' }}
-                    placeholder="Brief course information"
-                    value={courseForm.description}
-                    onChange={(e) => setCourseForm({ ...courseForm, description: e.target.value })}
-                  />
-                </div>
+            <form onSubmit={handleCourseSubmit} className="modal-form">
+              <div className="input-group">
+                <label htmlFor="course_code">Course Code</label>
+                <input id="course_code" type="text" className="input-field" placeholder="e.g. CS-301"
+                  value={courseForm.course_code}
+                  onChange={(e) => setCourseForm({ ...courseForm, course_code: e.target.value })} required />
+              </div>
+              <div className="input-group">
+                <label htmlFor="course_name">Course Name</label>
+                <input id="course_name" type="text" className="input-field" placeholder="e.g. Advanced Algorithms"
+                  value={courseForm.course_name}
+                  onChange={(e) => setCourseForm({ ...courseForm, course_name: e.target.value })} required />
+              </div>
+              <div className="input-group">
+                <label htmlFor="description">Description (Optional)</label>
+                <textarea id="description" className="input-field"
+                  style={{ minHeight: '80px', resize: 'vertical', fontFamily: 'inherit' }}
+                  placeholder="Brief course information"
+                  value={courseForm.description}
+                  onChange={(e) => setCourseForm({ ...courseForm, description: e.target.value })} />
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-ghost" onClick={() => setShowCourseModal(false)}>Cancel</button>
@@ -896,51 +1091,33 @@ export default function Dashboard() {
         </div>
       )}
 
+
       {/* Student Add Modal */}
       {showStudentModal && (
         <div className="modal-overlay" onClick={() => setShowStudentModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Add New Student</h2>
-              <button className="modal-close-btn" onClick={() => setShowStudentModal(false)}>&times;</button>
+              <h2>👤 Add New Student</h2>
+              <button className="modal-close" onClick={() => setShowStudentModal(false)}>✕</button>
             </div>
-            <form onSubmit={handleStudentSubmit} className="auth-form">
-              <div className="modal-body">
-                <div className="input-group" style={{ marginBottom: '1rem' }}>
-                  <label htmlFor="student_id">Student ID / Roll No</label>
-                  <input
-                    id="student_id"
-                    type="text"
-                    className="input-field"
-                    placeholder="e.g. STU-2026-001"
-                    value={studentForm.student_id}
-                    onChange={(e) => setStudentForm({ ...studentForm, student_id: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="input-group" style={{ marginBottom: '1rem' }}>
-                  <label htmlFor="full_name">Full Name</label>
-                  <input
-                    id="full_name"
-                    type="text"
-                    className="input-field"
-                    placeholder="e.g. Ahmad Raza"
-                    value={studentForm.full_name}
-                    onChange={(e) => setStudentForm({ ...studentForm, full_name: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="input-group">
-                  <label htmlFor="email">Email Address (Optional)</label>
-                  <input
-                    id="email"
-                    type="email"
-                    className="input-field"
-                    placeholder="e.g. ahmad@example.com"
-                    value={studentForm.email}
-                    onChange={(e) => setStudentForm({ ...studentForm, email: e.target.value })}
-                  />
-                </div>
+            <form onSubmit={handleStudentSubmit} className="modal-form">
+              <div className="input-group">
+                <label htmlFor="student_id">Student ID / Roll No</label>
+                <input id="student_id" type="text" className="input-field" placeholder="e.g. STU-2026-001"
+                  value={studentForm.student_id}
+                  onChange={(e) => setStudentForm({ ...studentForm, student_id: e.target.value })} required />
+              </div>
+              <div className="input-group">
+                <label htmlFor="full_name">Full Name</label>
+                <input id="full_name" type="text" className="input-field" placeholder="e.g. Ahmad Raza"
+                  value={studentForm.full_name}
+                  onChange={(e) => setStudentForm({ ...studentForm, full_name: e.target.value })} required />
+              </div>
+              <div className="input-group">
+                <label htmlFor="s_email">Email Address (Optional)</label>
+                <input id="s_email" type="email" className="input-field" placeholder="e.g. ahmad@example.com"
+                  value={studentForm.email}
+                  onChange={(e) => setStudentForm({ ...studentForm, email: e.target.value })} />
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-ghost" onClick={() => setShowStudentModal(false)}>Cancel</button>
@@ -951,97 +1128,77 @@ export default function Dashboard() {
         </div>
       )}
 
+
       {/* Attendance Log Modal */}
       {showAttendanceModal && (
         <div className="modal-overlay" onClick={() => setShowAttendanceModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Log Attendance</h2>
-              <button className="modal-close-btn" onClick={() => setShowAttendanceModal(false)}>&times;</button>
+              <h2>✅ Log Attendance</h2>
+              <button className="modal-close" onClick={() => setShowAttendanceModal(false)}>✕</button>
             </div>
-            <form onSubmit={handleAttendanceSubmit} className="auth-form">
-              <div className="modal-body">
-                {courses.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '1rem 0', color: 'var(--text-secondary)' }}>
-                    Please add at least one course first before logging attendance.
+            <form onSubmit={handleAttendanceSubmit} className="modal-form">
+              {courses.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-icon">📚</div>
+                  <h3>No Courses Yet</h3>
+                  <p>Add at least one course before logging attendance.</p>
+                </div>
+              ) : students.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-icon">👥</div>
+                  <h3>No Students Yet</h3>
+                  <p>Add at least one student before logging attendance.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="input-group">
+                    <label htmlFor="student_select">Select Student</label>
+                    <select id="student_select" className="input-field"
+                      value={attendanceForm.student_id}
+                      onChange={(e) => setAttendanceForm({ ...attendanceForm, student_id: e.target.value })} required>
+                      {students.map((s) => (
+                        <option key={s.id} value={s.student_id}>{s.student_id} — {s.full_name}</option>
+                      ))}
+                    </select>
                   </div>
-                ) : students.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '1rem 0', color: 'var(--text-secondary)' }}>
-                    Please add at least one student first before logging attendance.
+                  <div className="input-group">
+                    <label htmlFor="course_select">Select Course</label>
+                    <select id="course_select" className="input-field"
+                      value={attendanceForm.course_code}
+                      onChange={(e) => setAttendanceForm({ ...attendanceForm, course_code: e.target.value })} required>
+                      {courses.map((c) => (
+                        <option key={c.id} value={c.course_code}>{c.course_code} — {c.course_name}</option>
+                      ))}
+                    </select>
                   </div>
-                ) : (
-                  <>
-                    <div className="input-group" style={{ marginBottom: '1rem' }}>
-                      <label htmlFor="student_select">Select Student</label>
-                      <select
-                        id="student_select"
-                        className="input-field"
-                        style={{ background: '#111827', color: '#fff', cursor: 'pointer' }}
-                        value={attendanceForm.student_id}
-                        onChange={(e) => setAttendanceForm({ ...attendanceForm, student_id: e.target.value })}
-                        required
-                      >
-                        {students.map((s) => (
-                          <option key={s.id} value={s.student_id}>
-                            {s.student_id} - {s.full_name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="input-group" style={{ marginBottom: '1rem' }}>
-                      <label htmlFor="course_select">Select Course</label>
-                      <select
-                        id="course_select"
-                        className="input-field"
-                        style={{ background: '#111827', color: '#fff', cursor: 'pointer' }}
-                        value={attendanceForm.course_code}
-                        onChange={(e) => setAttendanceForm({ ...attendanceForm, course_code: e.target.value })}
-                        required
-                      >
-                        {courses.map((c) => (
-                          <option key={c.id} value={c.course_code}>
-                            {c.course_code} - {c.course_name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="input-group" style={{ marginBottom: '1rem' }}>
-                      <label htmlFor="attendance_date">Date</label>
-                      <input
-                        id="attendance_date"
-                        type="date"
-                        className="input-field"
-                        value={attendanceForm.date}
-                        onChange={(e) => setAttendanceForm({ ...attendanceForm, date: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div className="input-group">
-                      <label htmlFor="status_select">Status</label>
-                      <select
-                        id="status_select"
-                        className="input-field"
-                        style={{ background: '#111827', color: '#fff', cursor: 'pointer' }}
-                        value={attendanceForm.status}
-                        onChange={(e) => setAttendanceForm({ ...attendanceForm, status: e.target.value })}
-                        required
-                      >
-                        <option value="present">Present</option>
-                        <option value="absent">Absent</option>
-                        <option value="late">Late</option>
-                      </select>
-                    </div>
-                  </>
-                )}
-              </div>
-              <div className="modal-overlay-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: 'var(--space-4)' }}>
+                  <div className="input-group">
+                    <label htmlFor="attendance_date">Date</label>
+                    <input id="attendance_date" type="date" className="input-field"
+                      value={attendanceForm.date}
+                      onChange={(e) => setAttendanceForm({ ...attendanceForm, date: e.target.value })} required />
+                  </div>
+                  <div className="input-group">
+                    <label htmlFor="status_select">Status</label>
+                    <select id="status_select" className="input-field"
+                      value={attendanceForm.status}
+                      onChange={(e) => setAttendanceForm({ ...attendanceForm, status: e.target.value })} required>
+                      <option value="present">✅ Present</option>
+                      <option value="absent">❌ Absent</option>
+                      <option value="late">⏰ Late</option>
+                    </select>
+                  </div>
+                </>
+              )}
+              <div className="modal-footer">
                 <button type="button" className="btn btn-ghost" onClick={() => setShowAttendanceModal(false)}>Cancel</button>
-                {courses.length > 0 && students.length > 0 && <button type="submit" className="btn btn-primary">Log Record</button>}
+                {courses.length > 0 && students.length > 0 &&
+                  <button type="submit" className="btn btn-primary">Log Record</button>}
               </div>
             </form>
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

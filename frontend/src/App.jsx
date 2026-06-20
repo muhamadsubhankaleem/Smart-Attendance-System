@@ -4,6 +4,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import NotFound from './pages/NotFound';
 import AttendanceRecords from './pages/AttendanceRecords';
+import ThemeSwitcher from './ThemeSwitcher';
 
 export default function App() {
   return (
@@ -16,6 +17,9 @@ export default function App() {
         <Route path="/attendance" element={<AttendanceRecords />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
+
+      {/* Global floating theme switcher — visible on every page */}
+      <ThemeSwitcher />
     </BrowserRouter>
   );
 }

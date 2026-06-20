@@ -30,7 +30,6 @@ export default function Login({ isRegister = false }) {
         body: JSON.stringify(body),
       });
 
-      // Safely parse — server may return non-JSON when DB is down
       let data;
       const text = await res.text();
       try {
@@ -41,13 +40,9 @@ export default function Login({ isRegister = false }) {
           : `Server error (${res.status})`);
       }
 
-      if (!res.ok) {
-        throw new Error(data.detail || 'Something went wrong');
-      }
+      if (!res.ok) throw new Error(data.detail || 'Something went wrong');
 
-      if (data.access_token) {
-        localStorage.setItem('token', data.access_token);
-      }
+      if (data.access_token) localStorage.setItem('token', data.access_token);
       navigate('/dashboard');
     } catch (err) {
       setError(err.message === 'Failed to fetch'
@@ -63,29 +58,56 @@ export default function Login({ isRegister = false }) {
       <div className="orb orb-1" />
       <div className="orb orb-2" />
 
-      <div className="glass-card auth-card">
-        <Link to="/" className="navbar-brand" style={{ marginBottom: '2rem', justifyContent: 'center' }}>
-          <span className="brand-icon">SA</span>
-          SmartAttend
+      <div className="auth-card">
+        {/* Logo */}
+        <Link to="/" className="navbar-brand" style={{ marginBottom: '2rem', justifyContent: 'center', display: 'flex' }}>
+          <span className="brand-icon" style={{ width: 40, height: 40, fontSize: '0.8rem' }}>SA</span>
+          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, letterSpacing: '-0.02em' }}>SmartAttend</span>
         </Link>
+
+        {/* Mode Toggle */}
+        <div style={{
+          display: 'flex',
+          background: 'rgba(255,255,255,0.04)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '4px',
+          marginBottom: 'var(--space-8)',
+          border: '1px solid var(--border-glass)',
+        }}>
+          {['login', 'register'].map(m => (
+            <button
+              key={m}
+              onClick={() => { setMode(m); setError(''); }}
+              style={{
+                flex: 1,
+                padding: 'var(--space-2) var(--space-4)',
+                border: 'none',
+                borderRadius: 'var(--radius-md)',
+                fontFamily: 'var(--font-family)',
+                fontSize: 'var(--font-sm)',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all var(--transition-base)',
+                background: mode === m ? 'var(--gradient-btn)' : 'transparent',
+                color: mode === m ? '#fff' : 'var(--text-secondary)',
+                boxShadow: mode === m ? 'var(--shadow-btn)' : 'none',
+              }}
+            >
+              {m === 'login' ? 'Sign In' : 'Register'}
+            </button>
+          ))}
+        </div>
 
         <h1>{mode === 'register' ? 'Create Account' : 'Welcome Back'}</h1>
         <p className="subtitle">
           {mode === 'register'
             ? 'Start tracking attendance with AI power.'
-            : 'Sign in to your dashboard.'}
+            : 'Sign in to access your dashboard.'}
         </p>
 
         {error && (
-          <div style={{
-            padding: '0.75rem 1rem',
-            background: 'rgba(239,68,68,0.1)',
-            border: '1px solid rgba(239,68,68,0.2)',
-            borderRadius: 'var(--radius-md)',
-            color: 'var(--danger)',
-            fontSize: 'var(--font-sm)',
-            marginBottom: '1rem',
-          }}>
+          <div className="error-alert">
+            <span>⚠️</span>
             {error}
           </div>
         )}
@@ -136,18 +158,33 @@ export default function Login({ isRegister = false }) {
             />
           </div>
 
-          <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading
-              ? 'Please wait...'
-              : mode === 'register' ? 'Create Account' : 'Sign In'}
+          <button
+            type="submit"
+            id="auth-submit-btn"
+            className="btn btn-primary"
+            disabled={loading}
+            style={{ width: '100%', padding: 'var(--space-4)', fontSize: 'var(--font-base)', marginTop: 'var(--space-2)' }}
+          >
+            {loading ? (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />
+                Please wait...
+              </span>
+            ) : (
+              mode === 'register' ? 'Create Account →' : 'Sign In →'
+            )}
           </button>
         </form>
 
         <div className="auth-footer">
           {mode === 'register' ? (
-            <p>Already have an account? <a href="#" onClick={(e) => { e.preventDefault(); setMode('login'); }}>Sign In</a></p>
+            <p>Already have an account?{' '}
+              <a href="#" onClick={(e) => { e.preventDefault(); setMode('login'); setError(''); }}>Sign In</a>
+            </p>
           ) : (
-            <p>Don't have an account? <a href="#" onClick={(e) => { e.preventDefault(); setMode('register'); }}>Create one</a></p>
+            <p>Don't have an account?{' '}
+              <a href="#" onClick={(e) => { e.preventDefault(); setMode('register'); setError(''); }}>Create one</a>
+            </p>
           )}
         </div>
       </div>
