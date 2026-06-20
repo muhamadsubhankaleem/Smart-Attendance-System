@@ -7,7 +7,8 @@ from app.models import (
     Course, CourseCreate, CourseResponse,
     Student, StudentCreate, StudentResponse,
     Attendance, AttendanceCreate, AttendanceResponse, StatsResponse,
-    CourseReportRow, StudentReportRow
+    CourseReportRow, StudentReportRow,
+    SystemSetting, SystemSettingResponse, SystemSettingUpdate
 )
 from app.core.security import hash_password, verify_password, create_access_token, decode_token
 from datetime import date

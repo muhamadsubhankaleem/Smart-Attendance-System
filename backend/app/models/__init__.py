@@ -42,7 +42,24 @@ class Attendance(Base):
     status = Column(String(20), nullable=False)  # present, absent, late
 
 
+class SystemSetting(Base):
+    __tablename__ = "system_settings"
+
+    key = Column(String(50), primary_key=True)
+    value = Column(String(255), nullable=False)
+
+
 # ── Pydantic Schemas ──
+class SystemSettingResponse(BaseModel):
+    key: str
+    value: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SystemSettingUpdate(BaseModel):
+    value: str
+
 class UserCreate(BaseModel):
     full_name: str
     email: EmailStr

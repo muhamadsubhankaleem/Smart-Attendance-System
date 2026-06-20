@@ -13,7 +13,7 @@ class Base(DeclarativeBase):
 
 async def init_db() -> None:
     """Create all tables on startup."""
-    from app.models import User, Course, Student, Attendance  # noqa: F401
+    from app.models import User, Course, Student, Attendance, SystemSetting  # noqa: F401
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     print("[OK] SQLite database ready")
