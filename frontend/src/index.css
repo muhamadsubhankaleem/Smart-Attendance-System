@@ -154,16 +154,38 @@ a:hover { color: var(--accent-primary-light); }
 ::-webkit-scrollbar-thumb:hover { background: rgba(129,140,248,0.4); }
 
 /* ═══════════════════════════
-   ANIMATIONS
+   ANIMATIONS — Production-Grade
    ═══════════════════════════ */
+
+/* ── Base Keyframes ── */
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(28px); }
+  from { opacity: 0; transform: translateY(40px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-30px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes fadeIn {
   from { opacity: 0; }
   to   { opacity: 1; }
+}
+
+@keyframes fadeInLeft {
+  from { opacity: 0; transform: translateX(-40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes fadeInRight {
+  from { opacity: 0; transform: translateX(40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
 }
 
 @keyframes slideInLeft {
@@ -173,13 +195,20 @@ a:hover { color: var(--accent-primary-light); }
 
 @keyframes float {
   0%, 100% { transform: translateY(0) rotate(0deg); }
-  33%       { transform: translateY(-14px) rotate(1deg); }
-  66%       { transform: translateY(-7px) rotate(-1deg); }
+  33%      { transform: translateY(-18px) rotate(1deg); }
+  66%      { transform: translateY(-8px) rotate(-1deg); }
+}
+
+@keyframes floatSlow {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25%      { transform: translate(12px, -20px) scale(1.03); }
+  50%      { transform: translate(-8px, -30px) scale(0.98); }
+  75%      { transform: translate(15px, -15px) scale(1.02); }
 }
 
 @keyframes pulse-glow {
   0%, 100% { box-shadow: 0 0 8px rgba(129, 140, 248, 0.3); }
-  50%       { box-shadow: 0 0 22px rgba(129, 140, 248, 0.6); }
+  50%      { box-shadow: 0 0 24px rgba(129, 140, 248, 0.7); }
 }
 
 @keyframes gradient-shift {
@@ -199,17 +228,93 @@ a:hover { color: var(--accent-primary-light); }
 
 @keyframes bounceIn {
   0%   { transform: scale(0.8); opacity: 0; }
-  60%  { transform: scale(1.05); opacity: 1; }
+  60%  { transform: scale(1.04); opacity: 1; }
   100% { transform: scale(1); }
 }
 
 @keyframes borderGlow {
   0%, 100% { border-color: rgba(129,140,248,0.15); }
-  50%       { border-color: rgba(129,140,248,0.4); }
+  50%      { border-color: rgba(129,140,248,0.4); }
 }
 
-.animate-fade-in-up  { animation: fadeInUp 0.6s ease-out forwards; }
-.animate-fade-in     { animation: fadeIn 0.5s ease-out forwards; }
+@keyframes breathe {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50%      { opacity: 0.7; transform: scale(1.05); }
+}
+
+@keyframes lineExpand {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+@keyframes typewriter {
+  from { width: 0; }
+  to   { width: 100%; }
+}
+
+/* ── Scroll Reveal Classes ── */
+/* Elements start hidden; JS adds .revealed when in viewport */
+.reveal {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+.reveal.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.reveal-left {
+  opacity: 0;
+  transform: translateX(-50px);
+  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+.reveal-left.revealed {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.reveal-right {
+  opacity: 0;
+  transform: translateX(50px);
+  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+.reveal-right.revealed {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.reveal-scale {
+  opacity: 0;
+  transform: scale(0.88);
+  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+.reveal-scale.revealed {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* ── Stagger delay utilities ── */
+.stagger-1 { transition-delay: 0.06s; }
+.stagger-2 { transition-delay: 0.12s; }
+.stagger-3 { transition-delay: 0.18s; }
+.stagger-4 { transition-delay: 0.24s; }
+.stagger-5 { transition-delay: 0.30s; }
+.stagger-6 { transition-delay: 0.36s; }
+.stagger-7 { transition-delay: 0.42s; }
+.stagger-8 { transition-delay: 0.48s; }
+
+/* ── Legacy animation classes (keep for hero) ── */
+.animate-fade-in-up  { animation: fadeInUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-fade-in     { animation: fadeIn 0.6s ease-out forwards; }
 .animate-bounce-in   { animation: bounceIn 0.5s ease-out forwards; }
 
 .delay-1 { animation-delay: 0.08s; }
@@ -218,6 +323,48 @@ a:hover { color: var(--accent-primary-light); }
 .delay-4 { animation-delay: 0.32s; }
 .delay-5 { animation-delay: 0.4s; }
 .delay-6 { animation-delay: 0.5s; }
+
+/* ── Hover Tilt / Lift Effects ── */
+.hover-lift {
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.35s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35), var(--shadow-glow);
+}
+
+.hover-glow {
+  transition: box-shadow 0.4s ease, border-color 0.4s ease;
+}
+.hover-glow:hover {
+  box-shadow: 0 0 40px var(--accent-glow), var(--shadow-lg);
+  border-color: rgba(129, 140, 248, 0.3);
+}
+
+/* ── Smooth line separator that draws in ── */
+.line-reveal {
+  height: 2px;
+  background: var(--gradient-accent);
+  border-radius: var(--radius-full);
+  transform-origin: left;
+  transform: scaleX(0);
+  transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.line-reveal.revealed {
+  transform: scaleX(1);
+}
+
+/* ── Reduced motion preference ── */
+@media (prefers-reduced-motion: reduce) {
+  .reveal, .reveal-left, .reveal-right, .reveal-scale {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .orb, .orb-1, .orb-2, .orb-3 { animation: none; }
+  .hero-badge .dot { animation: none; }
+}
 
 /* ═══════════════════════════
    GLASS CARD
@@ -570,27 +717,29 @@ select.input-field {
   filter: blur(100px);
   pointer-events: none;
   will-change: transform;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
 }
 
 .orb-1 {
   width: 600px; height: 600px;
   background: radial-gradient(circle, rgba(99,102,241,0.18) 0%, transparent 70%);
   top: -10%; right: -15%;
-  animation: float 10s ease-in-out infinite;
+  animation: floatSlow 18s ease-in-out infinite;
 }
 
 .orb-2 {
   width: 450px; height: 450px;
   background: radial-gradient(circle, rgba(34,211,238,0.12) 0%, transparent 70%);
   bottom: -5%; left: -10%;
-  animation: float 13s ease-in-out infinite reverse;
+  animation: floatSlow 22s ease-in-out infinite reverse;
 }
 
 .orb-3 {
   width: 280px; height: 280px;
   background: radial-gradient(circle, rgba(192,132,252,0.1) 0%, transparent 70%);
   top: 40%; left: 35%;
-  animation: float 16s ease-in-out infinite;
+  animation: floatSlow 26s ease-in-out infinite 3s;
 }
 
 /* ── Stats Bar ── */

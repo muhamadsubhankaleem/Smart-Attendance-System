@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useReveal, useStaggerReveal, useCountUp, useMouseParallax } from '../useAnimations';
 
 const FAQS = [
   {
@@ -158,14 +159,52 @@ const FEATURES = [
 ];
 
 const STATS = [
-  { value: '10K+', label: 'Students Tracked' },
-  { value: '500+', label: 'Courses Managed' },
-  { value: '99.5%', label: 'Accuracy Rate' },
-  { value: '24/7', label: 'Uptime SLA' },
+  { value: '10K+', numeric: 10000, suffix: '+', label: 'Students Tracked' },
+  { value: '500+', numeric: 500, suffix: '+', label: 'Courses Managed' },
+  { value: '99.5%', numeric: 99, suffix: '.5%', label: 'Accuracy Rate' },
+  { value: '24/7', numeric: 24, suffix: '/7', label: 'Uptime SLA' },
 ];
+
+/* Animated stat counter */
+function AnimatedStat({ stat, index }) {
+  const { ref, count } = useCountUp(String(stat.numeric), 2200);
+  return (
+    <div
+      ref={ref}
+      className={`stat-item reveal stagger-${index + 1}`}
+      style={{ transitionDelay: `${0.3 + index * 0.1}s` }}
+    >
+      <div className="stat-value">{count}{stat.suffix}</div>
+      <div className="stat-label">{stat.label}</div>
+    </div>
+  );
+}
+
+/* Scroll-reveal wrapper */
+function Reveal({ children, className = 'reveal', delay = 0, style = {} }) {
+  const { ref, isVisible } = useReveal();
+  return (
+    <div
+      ref={ref}
+      className={`${className} ${isVisible ? 'revealed' : ''}`}
+      style={{ transitionDelay: `${delay}s`, ...style }}
+    >
+      {children}
+    </div>
+  );
+}
 
 export default function Landing() {
   const [openFaq, setOpenFaq] = useState(null);
+  const mouse = useMouseParallax(0.015);
+
+  // Scroll-reveal hooks for sections
+  const featuresHeader = useReveal();
+  const featuresGrid = useStaggerReveal({ stagger: 0.08 });
+  const ctaSection = useReveal({ threshold: 0.2 });
+  const faqHeader = useReveal();
+  const faqList = useStaggerReveal({ stagger: 0.06 });
+  const statsReveal = useReveal({ threshold: 0.3 });
 
   return (
     <>
@@ -173,9 +212,10 @@ export default function Landing() {
 
       {/* ── Hero ── */}
       <section className="hero" id="home">
-        <div className="orb orb-1" />
-        <div className="orb orb-2" />
-        <div className="orb orb-3" />
+        {/* Parallax orbs that respond to mouse movement */}
+        <div className="orb orb-1" style={{ transform: `translate(${mouse.x * 1.2}px, ${mouse.y * 1.2}px)` }} />
+        <div className="orb orb-2" style={{ transform: `translate(${mouse.x * -0.8}px, ${mouse.y * -0.8}px)` }} />
+        <div className="orb orb-3" style={{ transform: `translate(${mouse.x * 0.5}px, ${mouse.y * 0.5}px)` }} />
 
         <div className="hero-content">
           <div className="hero-badge animate-fade-in-up">
@@ -203,21 +243,28 @@ export default function Landing() {
             </a>
           </div>
 
-          {/* Stats Bar */}
-          <div className="stats-bar" id="stats">
+          {/* Stats Bar — animated counters */}
+          <div
+            ref={statsReveal.ref}
+            className={`stats-bar ${statsReveal.isVisible ? '' : ''}`}
+            id="stats"
+          >
             {STATS.map((s, i) => (
-              <div className="stat-item" key={i}>
-                <div className="stat-value">{s.value}</div>
-                <div className="stat-label">{s.label}</div>
-              </div>
+              <AnimatedStat key={i} stat={s} index={i} />
             ))}
           </div>
         </div>
       </section>
 
+      {/* ── Line separator ── */}
+      <Reveal className="line-reveal" style={{ maxWidth: '200px', margin: '0 auto' }} />
+
       {/* ── Features Section ── */}
       <section className="section" id="features">
-        <div className="section-header">
+        <div
+          ref={featuresHeader.ref}
+          className={`section-header reveal ${featuresHeader.isVisible ? 'revealed' : ''}`}
+        >
           <div className="label">Features</div>
           <h2>Everything You Need</h2>
           <p>
@@ -226,12 +273,11 @@ export default function Landing() {
           </p>
         </div>
 
-        <div className="features-grid">
+        <div ref={featuresGrid.containerRef} className="features-grid">
           {FEATURES.map((f, i) => (
             <div
-              className="glass-card feature-card animate-fade-in-up"
+              className={`glass-card feature-card hover-lift reveal stagger-${i + 1} ${featuresGrid.isVisible ? 'revealed' : ''}`}
               key={i}
-              style={{ animationDelay: `${i * 0.08}s`, opacity: 0 }}
             >
               <div className="feature-icon" style={{ background: f.color }}>
                 {f.icon}
@@ -243,10 +289,14 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ── Line separator ── */}
+      <Reveal className="line-reveal" style={{ maxWidth: '200px', margin: '0 auto' }} />
+
       {/* ── CTA Section ── */}
       <section className="section" id="about" style={{ textAlign: 'center' }}>
         <div
-          className="glass-card"
+          ref={ctaSection.ref}
+          className={`glass-card reveal-scale ${ctaSection.isVisible ? 'revealed' : ''}`}
           style={{
             padding: 'var(--space-16) var(--space-8)',
             background: 'linear-gradient(135deg, rgba(99,102,241,0.08), rgba(34,211,238,0.04))',
@@ -262,6 +312,7 @@ export default function Landing() {
             background: 'radial-gradient(circle, rgba(99,102,241,0.1) 0%, transparent 70%)',
             top: '-100px', left: '50%', transform: 'translateX(-50%)',
             pointerEvents: 'none',
+            animation: 'breathe 5s ease-in-out infinite',
           }} />
           <div style={{ position: 'relative', zIndex: 1 }}>
             <div className="label" style={{
@@ -313,7 +364,10 @@ export default function Landing() {
 
       {/* ── FAQ Section ── */}
       <section className="section" id="faq">
-        <div className="section-header">
+        <div
+          ref={faqHeader.ref}
+          className={`section-header reveal ${faqHeader.isVisible ? 'revealed' : ''}`}
+        >
           <div className="label">FAQ</div>
           <h2>Frequently Asked Questions</h2>
           <p>
@@ -322,47 +376,56 @@ export default function Landing() {
           </p>
         </div>
 
-        <div style={{
-          maxWidth: '720px',
-          margin: '0 auto',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 'var(--space-3)',
-        }}>
+        <div
+          ref={faqList.containerRef}
+          style={{
+            maxWidth: '720px',
+            margin: '0 auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-3)',
+          }}
+        >
           {FAQS.map((faq, i) => (
-            <FaqItem
+            <div
               key={i}
-              faq={faq}
-              isOpen={openFaq === i}
-              onClick={() => setOpenFaq(openFaq === i ? null : i)}
-            />
+              className={`reveal stagger-${i + 1} ${faqList.isVisible ? 'revealed' : ''}`}
+            >
+              <FaqItem
+                faq={faq}
+                isOpen={openFaq === i}
+                onClick={() => setOpenFaq(openFaq === i ? null : i)}
+              />
+            </div>
           ))}
         </div>
       </section>
 
       {/* ── Footer ── */}
-      <footer className="footer">
-        <div className="footer-content">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-            <div className="brand-icon" style={{
-              width: 28, height: 28,
-              background: 'var(--gradient-btn)',
-              borderRadius: 'var(--radius-sm)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '0.6rem', fontWeight: 800, color: '#fff',
-            }}>SA</div>
-            <span style={{ color: 'var(--text-muted)', fontSize: 'var(--font-sm)' }}>
-              © 2026 SmartAttend — Built with modern technology.
-            </span>
+      <Reveal>
+        <footer className="footer">
+          <div className="footer-content">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <div className="brand-icon" style={{
+                width: 28, height: 28,
+                background: 'var(--gradient-btn)',
+                borderRadius: 'var(--radius-sm)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '0.6rem', fontWeight: 800, color: '#fff',
+              }}>SA</div>
+              <span style={{ color: 'var(--text-muted)', fontSize: 'var(--font-sm)' }}>
+                © 2026 SmartAttend — Built with modern technology.
+              </span>
+            </div>
+            <ul className="footer-links">
+              <li><a href="#features">Features</a></li>
+              <li><a href="#faq">FAQ</a></li>
+              <li><a href="#about">About</a></li>
+              <li><Link to="/login">Sign In</Link></li>
+            </ul>
           </div>
-          <ul className="footer-links">
-            <li><a href="#features">Features</a></li>
-            <li><a href="#faq">FAQ</a></li>
-            <li><a href="#about">About</a></li>
-            <li><Link to="/login">Sign In</Link></li>
-          </ul>
-        </div>
-      </footer>
+        </footer>
+      </Reveal>
     </>
   );
 }
