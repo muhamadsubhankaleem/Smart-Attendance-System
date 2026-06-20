@@ -1220,7 +1220,8 @@ export default function Dashboard() {
         {activeTab === 'qr' && renderQRSession()}
         {activeTab === 'scan' && <ScanQRTab courses={courses} students={students} />}
         {activeTab === 'reports' && renderReports()}
-        {!['overview', 'students', 'courses', 'attendance', 'qr', 'scan', 'reports'].includes(activeTab) && renderPlaceholder()}
+        {activeTab === 'settings' && renderSettings()}
+        {!['overview', 'students', 'courses', 'attendance', 'qr', 'scan', 'reports', 'settings'].includes(activeTab) && renderPlaceholder()}
       </main>
 
       {/* Course Add Modal */}
