@@ -154,7 +154,7 @@ async def get_attendance(token: str = "", db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/attendance", response_model=AttendanceResponse)
-async def create_attendance(body: AttendanceCreate, token: str = "", db: AsyncSession = Depends(get_db)):
+async def create_attendance(body: AttendanceCreate, token: str = "", force: bool = False, db: AsyncSession = Depends(get_db)):
     verify_auth(token)
     if body.status not in ["present", "absent", "late"]:
         raise HTTPException(400, "Invalid attendance status. Must be present, absent, or late")
@@ -167,6 +167,19 @@ async def create_attendance(body: AttendanceCreate, token: str = "", db: AsyncSe
     student = student_exist.scalar_one_or_none()
     if not student:
         raise HTTPException(400, f"Student with ID '{body.student_id}' does not exist")
+
+    # Duplicate check unless force is True
+    if not force:
+        existing_att = await db.execute(
+            select(Attendance)
+            .where(
+                Attendance.student_id == body.student_id,
+                Attendance.course_code == body.course_code,
+                Attendance.date == body.date
+            )
+        )
+        if existing_att.scalar_one_or_none():
+            raise HTTPException(409, f"Attendance already logged for this student in {body.course_code} on {body.date}.")
     
     attendance = Attendance(
         student_id=body.student_id,

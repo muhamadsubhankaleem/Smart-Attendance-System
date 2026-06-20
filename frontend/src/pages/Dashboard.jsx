@@ -27,6 +27,7 @@ function ScanQRTab({ courses, students }) {
   const [scanStatus, setScanStatus] = useState('');
   const [studentId, setStudentId] = useState('');
   const [loading, setLoading] = useState(false);
+  const [duplicate, setDuplicate] = useState(false);
 
   useEffect(() => {
     if (!scanResult) {
@@ -39,6 +40,7 @@ function ScanQRTab({ courses, students }) {
             if (data.type === 'attendance') {
               setScanResult(data);
               setScanStatus('');
+              setDuplicate(false);
             } else {
               setScanStatus('Invalid QR Code type.');
             }
@@ -52,12 +54,14 @@ function ScanQRTab({ courses, students }) {
     }
   }, [scanResult]);
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (force = false) => {
     if (!studentId || !scanResult) return;
     setLoading(true);
+    setDuplicate(false);
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`/api/v1/auth/attendance?token=${encodeURIComponent(token)}`, {
+      const forceParam = force ? '&force=true' : '';
+      const res = await fetch(`/api/v1/auth/attendance?token=${encodeURIComponent(token)}${forceParam}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -68,7 +72,12 @@ function ScanQRTab({ courses, students }) {
         })
       });
       if (res.ok) {
-        setScanStatus('Success! Attendance marked as Present.');
+        setScanStatus(force ? 'Success! Additional attendance entry added.' : 'Success! Attendance marked as Present.');
+        setDuplicate(false);
+      } else if (res.status === 409) {
+        const error = await res.json();
+        setScanStatus(error.detail);
+        setDuplicate(true);
       } else {
         const error = await res.json();
         setScanStatus(`Error: ${error.detail}`);
@@ -108,7 +117,7 @@ function ScanQRTab({ courses, students }) {
                 className="input-field"
                 style={{ background: 'rgba(0,0,0,0.4)', color: '#fff' }}
                 value={studentId}
-                onChange={(e) => setStudentId(e.target.value)}
+                onChange={(e) => { setStudentId(e.target.value); setScanStatus(''); setDuplicate(false); }}
               >
                 <option value="">-- Choose Student --</option>
                 {students.map(s => (
@@ -118,14 +127,34 @@ function ScanQRTab({ courses, students }) {
             </div>
 
             <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
-              <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setScanResult(null)}>Rescan</button>
-              <button className="btn btn-primary" style={{ flex: 1 }} disabled={!studentId || loading} onClick={handleSubmit}>
+              <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => { setScanResult(null); setScanStatus(''); setDuplicate(false); }}>Rescan</button>
+              <button className="btn btn-primary" style={{ flex: 1 }} disabled={!studentId || loading} onClick={() => handleSubmit(false)}>
                 {loading ? 'Submitting...' : 'Mark Attendance'}
               </button>
             </div>
+
+            {/* Status / Duplicate Warning */}
             {scanStatus && (
-              <div style={{ marginTop: '1.5rem', padding: '1rem', borderRadius: '0.5rem', background: scanStatus.includes('Success') ? 'rgba(52,211,153,0.1)' : 'rgba(248,113,113,0.1)', color: scanStatus.includes('Success') ? 'var(--success)' : 'var(--danger)' }}>
-                {scanStatus}
+              <div style={{
+                marginTop: '1.5rem', padding: '1rem', borderRadius: '0.75rem',
+                background: scanStatus.includes('Success') ? 'rgba(52,211,153,0.1)' : duplicate ? 'rgba(251,191,36,0.1)' : 'rgba(248,113,113,0.1)',
+                color: scanStatus.includes('Success') ? 'var(--success)' : duplicate ? 'var(--warning)' : 'var(--danger)',
+                textAlign: 'left',
+              }}>
+                <p style={{ fontWeight: 600, marginBottom: duplicate ? '0.75rem' : 0 }}>
+                  {duplicate ? '⚠️ ' : scanStatus.includes('Success') ? '✅ ' : '❌ '}
+                  {scanStatus}
+                </p>
+                {duplicate && (
+                  <button
+                    className="btn btn-outline"
+                    style={{ width: '100%', marginTop: '0.5rem', borderColor: 'var(--warning)', color: 'var(--warning)' }}
+                    disabled={loading}
+                    onClick={() => handleSubmit(true)}
+                  >
+                    {loading ? 'Adding...' : 'Mark Again Anyway (Force Add)'}
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -162,6 +191,7 @@ export default function Dashboard() {
   const [showCourseModal, setShowCourseModal] = useState(false);
   const [showStudentModal, setShowStudentModal] = useState(false);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+  const [attDuplicateError, setAttDuplicateError] = useState('');
 
   // Form States
   const [courseForm, setCourseForm] = useState({ course_code: '', course_name: '', description: '' });
@@ -388,17 +418,19 @@ export default function Dashboard() {
     }
   };
 
-  const handleAttendanceSubmit = async (e) => {
-    e.preventDefault();
+  const handleAttendanceSubmit = async (e, force = false) => {
+    if (e) e.preventDefault();
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`/api/v1/auth/attendance?token=${encodeURIComponent(token)}`, {
+      const forceParam = force ? '&force=true' : '';
+      const res = await fetch(`/api/v1/auth/attendance?token=${encodeURIComponent(token)}${forceParam}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(attendanceForm),
       });
       if (res.ok) {
         setShowAttendanceModal(false);
+        setAttDuplicateError('');
         setAttendanceForm({
           student_id: students[0]?.student_id || '',
           course_code: courses[0]?.course_code || '',
@@ -407,6 +439,9 @@ export default function Dashboard() {
         });
         fetchAttendance();
         fetchStats();
+      } else if (res.status === 409) {
+        const data = await res.json();
+        setAttDuplicateError(data.detail);
       } else {
         const data = await res.json();
         alert(data.detail || 'Failed to log attendance');
@@ -678,6 +713,7 @@ export default function Dashboard() {
                 status: 'present'
               });
             }
+            setAttDuplicateError('');
             setShowAttendanceModal(true);
           }}>
             + Log Attendance
@@ -1131,13 +1167,13 @@ export default function Dashboard() {
 
       {/* Attendance Log Modal */}
       {showAttendanceModal && (
-        <div className="modal-overlay" onClick={() => setShowAttendanceModal(false)}>
+        <div className="modal-overlay" onClick={() => { setShowAttendanceModal(false); setAttDuplicateError(''); }}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>✅ Log Attendance</h2>
-              <button className="modal-close" onClick={() => setShowAttendanceModal(false)}>✕</button>
+              <button className="modal-close" onClick={() => { setShowAttendanceModal(false); setAttDuplicateError(''); }}>✕</button>
             </div>
-            <form onSubmit={handleAttendanceSubmit} className="modal-form">
+            <form onSubmit={(e) => handleAttendanceSubmit(e, false)} className="modal-form">
               {courses.length === 0 ? (
                 <div className="empty-state">
                   <div className="empty-icon">📚</div>
@@ -1156,7 +1192,10 @@ export default function Dashboard() {
                     <label htmlFor="student_select">Select Student</label>
                     <select id="student_select" className="input-field"
                       value={attendanceForm.student_id}
-                      onChange={(e) => setAttendanceForm({ ...attendanceForm, student_id: e.target.value })} required>
+                      onChange={(e) => {
+                        setAttendanceForm({ ...attendanceForm, student_id: e.target.value });
+                        setAttDuplicateError('');
+                      }} required>
                       {students.map((s) => (
                         <option key={s.id} value={s.student_id}>{s.student_id} — {s.full_name}</option>
                       ))}
@@ -1166,7 +1205,10 @@ export default function Dashboard() {
                     <label htmlFor="course_select">Select Course</label>
                     <select id="course_select" className="input-field"
                       value={attendanceForm.course_code}
-                      onChange={(e) => setAttendanceForm({ ...attendanceForm, course_code: e.target.value })} required>
+                      onChange={(e) => {
+                        setAttendanceForm({ ...attendanceForm, course_code: e.target.value });
+                        setAttDuplicateError('');
+                      }} required>
                       {courses.map((c) => (
                         <option key={c.id} value={c.course_code}>{c.course_code} — {c.course_name}</option>
                       ))}
@@ -1176,13 +1218,19 @@ export default function Dashboard() {
                     <label htmlFor="attendance_date">Date</label>
                     <input id="attendance_date" type="date" className="input-field"
                       value={attendanceForm.date}
-                      onChange={(e) => setAttendanceForm({ ...attendanceForm, date: e.target.value })} required />
+                      onChange={(e) => {
+                        setAttendanceForm({ ...attendanceForm, date: e.target.value });
+                        setAttDuplicateError('');
+                      }} required />
                   </div>
                   <div className="input-group">
                     <label htmlFor="status_select">Status</label>
                     <select id="status_select" className="input-field"
                       value={attendanceForm.status}
-                      onChange={(e) => setAttendanceForm({ ...attendanceForm, status: e.target.value })} required>
+                      onChange={(e) => {
+                        setAttendanceForm({ ...attendanceForm, status: e.target.value });
+                        setAttDuplicateError('');
+                      }} required>
                       <option value="present">✅ Present</option>
                       <option value="absent">❌ Absent</option>
                       <option value="late">⏰ Late</option>
@@ -1190,10 +1238,29 @@ export default function Dashboard() {
                   </div>
                 </>
               )}
+
+              {attDuplicateError && (
+                <div style={{
+                  marginTop: '1.5rem', padding: '1rem', borderRadius: '0.75rem',
+                  background: 'rgba(251,191,36,0.1)', color: 'var(--warning)',
+                  textAlign: 'left'
+                }}>
+                  <p style={{ fontWeight: 600, marginBottom: '0.75rem' }}>⚠️ {attDuplicateError}</p>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    style={{ width: '100%', marginTop: '0.5rem', borderColor: 'var(--warning)', color: 'var(--warning)' }}
+                    onClick={() => handleAttendanceSubmit(null, true)}
+                  >
+                    Mark Again Anyway (Force Add)
+                  </button>
+                </div>
+              )}
+
               <div className="modal-footer">
-                <button type="button" className="btn btn-ghost" onClick={() => setShowAttendanceModal(false)}>Cancel</button>
+                <button type="button" className="btn btn-ghost" onClick={() => { setShowAttendanceModal(false); setAttDuplicateError(''); }}>Cancel</button>
                 {courses.length > 0 && students.length > 0 &&
-                  <button type="submit" className="btn btn-primary">Log Record</button>}
+                  <button type="submit" className="btn btn-primary" disabled={!!attDuplicateError}>Log Record</button>}
               </div>
             </form>
           </div>
