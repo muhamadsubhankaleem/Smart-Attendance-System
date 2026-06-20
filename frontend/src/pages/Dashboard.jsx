@@ -11,6 +11,7 @@ const SIDEBAR_ITEMS = [
   { icon: '📱', label: 'QR Sessions', id: 'qr' },
   { icon: '📷', label: 'Scan QR', id: 'scan' },
   { icon: '📄', label: 'Reports', id: 'reports' },
+  { icon: '⚙️', label: 'Settings', id: 'settings' },
 ];
 
 const MOCK_ATTENDANCE = [
@@ -207,6 +208,49 @@ export default function Dashboard() {
   const [qrSessionCourse, setQrSessionCourse] = useState('');
   const [showQR, setShowQR] = useState(false);
 
+  // Settings States
+  const [systemSettings, setSystemSettings] = useState({
+    allow_multiple_daily_attendance: 'false'
+  });
+  const [settingsLoading, setSettingsLoading] = useState(false);
+
+  const fetchSystemSettings = async () => {
+    const token = localStorage.getItem('token');
+    setSettingsLoading(true);
+    try {
+      const res = await fetch(`/api/v1/auth/settings?token=${encodeURIComponent(token)}`);
+      if (res.ok) {
+        const data = await res.json();
+        const settObj = {};
+        data.forEach(s => {
+          settObj[s.key] = s.value;
+        });
+        setSystemSettings(settObj);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
+  const updateSystemSetting = async (key, value) => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`/api/v1/auth/settings/${key}?token=${encodeURIComponent(token)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: String(value) })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSystemSettings(prev => ({ ...prev, [data.key]: data.value }));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const fetchStats = async () => {
     const token = localStorage.getItem('token');
     try {
@@ -338,6 +382,8 @@ export default function Dashboard() {
       } else if (activeTab === 'scan' || activeTab === 'qr') {
         fetchCourses();
         fetchStudents();
+      } else if (activeTab === 'settings') {
+        fetchSystemSettings();
       }
     }
   }, [activeTab, user]);
@@ -989,6 +1035,94 @@ export default function Dashboard() {
       </>
     );
   };
+
+  const renderSettings = () => {
+    const allowMultiple = systemSettings.allow_multiple_daily_attendance === 'true';
+
+    return (
+      <>
+        <div className="dashboard-header">
+          <div>
+            <h1>System Settings</h1>
+            <span className="date">Configure global platform rules and defaults</span>
+          </div>
+        </div>
+
+        <div className="glass-card" style={{ maxWidth: '700px', margin: '0 auto', padding: '2.5rem 2rem' }}>
+          <h2 style={{ fontSize: '1.25rem', marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.75rem' }}>
+            ⚙️ Attendance Settings
+          </h2>
+
+          {settingsLoading ? (
+            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+              Loading settings...
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between', 
+                gap: '2rem',
+                background: 'rgba(255,255,255,0.02)',
+                padding: '1.5rem',
+                borderRadius: '1rem',
+                border: '1px solid rgba(255,255,255,0.05)'
+              }}>
+                <div style={{ flex: 1 }}>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.25rem', color: '#fff' }}>
+                    Allow Multiple Daily Attendances
+                  </h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: '1.4' }}>
+                    Allow students to log attendance for the same course multiple times on the same day. 
+                    If disabled, duplicate scans will trigger warnings and require manual bypass.
+                  </p>
+                </div>
+                <div>
+                  <label className="switch" style={{
+                    position: 'relative',
+                    display: 'inline-block',
+                    width: '60px',
+                    height: '34px',
+                  }}>
+                    <input 
+                      type="checkbox" 
+                      checked={allowMultiple}
+                      onChange={(e) => updateSystemSetting('allow_multiple_daily_attendance', e.target.checked ? 'true' : 'false')}
+                      style={{ opacity: 0, width: 0, height: 0 }}
+                    />
+                    <span className="slider round" style={{
+                      position: 'absolute',
+                      cursor: 'pointer',
+                      top: 0, left: 0, right: 0, bottom: 0,
+                      backgroundColor: allowMultiple ? 'var(--accent-primary)' : 'rgba(255,255,255,0.15)',
+                      transition: '.4s',
+                      borderRadius: '34px',
+                      boxShadow: allowMultiple ? '0 0 10px var(--accent-primary-light)' : 'none'
+                    }}>
+                      <span className="thumb" style={{
+                        position: 'absolute',
+                        content: '""',
+                        height: '26px',
+                        width: '26px',
+                        left: '4px',
+                        bottom: '4px',
+                        backgroundColor: 'white',
+                        transition: '.4s',
+                        borderRadius: '50%',
+                        transform: allowMultiple ? 'translateX(26px)' : 'translateX(0)'
+                      }} />
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </>
+    );
+  };
+
 
   const renderPlaceholder = () => {
     const item = SIDEBAR_ITEMS.find(i => i.id === activeTab);

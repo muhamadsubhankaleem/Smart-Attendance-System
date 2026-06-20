@@ -171,16 +171,22 @@ async def create_attendance(body: AttendanceCreate, token: str = "", force: bool
 
     # Duplicate check unless force is True
     if not force:
-        existing_att = await db.execute(
-            select(Attendance)
-            .where(
-                Attendance.student_id == body.student_id,
-                Attendance.course_code == body.course_code,
-                Attendance.date == body.date
+        # Check system settings first
+        sett_res = await db.execute(select(SystemSetting).where(SystemSetting.key == "allow_multiple_daily_attendance"))
+        sett = sett_res.scalar_one_or_none()
+        allow_multiple = sett and sett.value == "true"
+
+        if not allow_multiple:
+            existing_att = await db.execute(
+                select(Attendance)
+                .where(
+                    Attendance.student_id == body.student_id,
+                    Attendance.course_code == body.course_code,
+                    Attendance.date == body.date
+                )
             )
-        )
-        if existing_att.scalar_one_or_none():
-            raise HTTPException(409, f"Attendance already logged for this student in {body.course_code} on {body.date}.")
+            if existing_att.scalar_one_or_none():
+                raise HTTPException(409, f"Attendance already logged for this student in {body.course_code} on {body.date}.")
     
     attendance = Attendance(
         student_id=body.student_id,
@@ -317,3 +323,48 @@ async def get_student_report(student_id: str, token: str = "", db: AsyncSession 
         ))
         
     return report
+
+
+# ── Settings Endpoints ──
+@router.get("/settings", response_model=list[SystemSettingResponse])
+async def get_settings(token: str = "", db: AsyncSession = Depends(get_db)):
+    verify_auth(token)
+    result = await db.execute(select(SystemSetting))
+    settings_list = list(result.scalars().all())
+
+    # Ensure default settings are present
+    defaults = {
+        "allow_multiple_daily_attendance": "false"
+    }
+
+    existing_keys = {s.key for s in settings_list}
+    updated = False
+    for k, v in defaults.items():
+        if k not in existing_keys:
+            new_set = SystemSetting(key=k, value=v)
+            db.add(new_set)
+            settings_list.append(new_set)
+            updated = True
+
+    if updated:
+        await db.commit()
+
+    return settings_list
+
+
+@router.put("/settings/{key}", response_model=SystemSettingResponse)
+async def update_setting(key: str, body: SystemSettingUpdate, token: str = "", db: AsyncSession = Depends(get_db)):
+    verify_auth(token)
+    result = await db.execute(select(SystemSetting).where(SystemSetting.key == key))
+    setting = result.scalar_one_or_none()
+
+    if not setting:
+        setting = SystemSetting(key=key, value=body.value)
+        db.add(setting)
+    else:
+        setting.value = body.value
+
+    await db.commit()
+    await db.refresh(setting)
+    return setting
+
